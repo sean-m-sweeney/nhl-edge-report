@@ -4,14 +4,20 @@
  */
 
 // State
-let players = [];
-let currentSort = { field: 'points', direction: 'desc' };
+let allPlayers = [];
+let forwards = [];
+let defensemen = [];
+let sortState = {
+    forwards: { field: 'points', direction: 'desc' },
+    defensemen: { field: 'points', direction: 'desc' }
+};
 
 // DOM Elements
 const loadingEl = document.getElementById('loading');
 const errorEl = document.getElementById('error');
 const tableContainer = document.getElementById('table-container');
-const playersBody = document.getElementById('players-body');
+const forwardsBody = document.getElementById('forwards-body');
+const defensemenBody = document.getElementById('defensemen-body');
 const lastUpdatedEl = document.getElementById('last-updated');
 const legendEl = document.getElementById('legend');
 
@@ -139,18 +145,9 @@ function getNestedValue(obj, path) {
 }
 
 /**
- * Sort players by field
+ * Sort players array by field
  */
-function sortPlayers(field) {
-    // Toggle direction if same field
-    if (currentSort.field === field) {
-        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-    } else {
-        currentSort.field = field;
-        // Default to descending for most stats, ascending for name
-        currentSort.direction = field === 'name' ? 'asc' : 'desc';
-    }
-
+function sortPlayersArray(playersArray, field, direction) {
     // Map field names to data paths
     const fieldMap = {
         'jersey_number': 'jersey_number',
@@ -178,7 +175,7 @@ function sortPlayers(field) {
 
     const path = fieldMap[field] || field;
 
-    players.sort((a, b) => {
+    playersArray.sort((a, b) => {
         let aVal = getNestedValue(a, path);
         let bVal = getNestedValue(b, path);
 
@@ -189,40 +186,74 @@ function sortPlayers(field) {
         // String comparison for name
         if (typeof aVal === 'string') {
             const comparison = aVal.localeCompare(bVal);
-            return currentSort.direction === 'asc' ? comparison : -comparison;
+            return direction === 'asc' ? comparison : -comparison;
         }
 
         // Numeric comparison
         const comparison = aVal - bVal;
-        return currentSort.direction === 'asc' ? comparison : -comparison;
+        return direction === 'asc' ? comparison : -comparison;
     });
-
-    renderTable();
-    updateSortIndicators();
 }
 
 /**
- * Update sort indicator arrows in headers
+ * Sort a specific table
  */
-function updateSortIndicators() {
-    // Remove all existing indicators
-    document.querySelectorAll('.sort-indicator').forEach(el => el.remove());
+function sortTable(tableType, field) {
+    const state = sortState[tableType];
+
+    // Toggle direction if same field
+    if (state.field === field) {
+        state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        state.field = field;
+        // Default to descending for most stats, ascending for name
+        state.direction = field === 'name' ? 'asc' : 'desc';
+    }
+
+    if (tableType === 'forwards') {
+        sortPlayersArray(forwards, field, state.direction);
+        renderForwards();
+    } else {
+        sortPlayersArray(defensemen, field, state.direction);
+        renderDefensemen();
+    }
+
+    updateSortIndicators(tableType);
+}
+
+/**
+ * Update sort indicator arrows in headers for a specific table
+ */
+function updateSortIndicators(tableType) {
+    const tableId = tableType === 'forwards' ? 'forwards-table' : 'defensemen-table';
+    const table = document.getElementById(tableId);
+    const state = sortState[tableType];
+
+    // Remove all existing indicators in this table
+    table.querySelectorAll('.sort-indicator').forEach(el => el.remove());
 
     // Add indicator to current sort column
-    const header = document.querySelector(`th[data-sort="${currentSort.field}"]`);
+    const header = table.querySelector(`th[data-sort="${state.field}"]`);
     if (header) {
         const indicator = document.createElement('span');
         indicator.className = 'sort-indicator ml-1';
-        indicator.textContent = currentSort.direction === 'asc' ? '▲' : '▼';
+        indicator.textContent = state.direction === 'asc' ? '▲' : '▼';
         header.appendChild(indicator);
     }
 }
 
 /**
- * Render the players table
+ * Render the forwards table
  */
-function renderTable() {
-    playersBody.innerHTML = players.map(renderPlayerRow).join('');
+function renderForwards() {
+    forwardsBody.innerHTML = forwards.map(renderPlayerRow).join('');
+}
+
+/**
+ * Render the defensemen table
+ */
+function renderDefensemen() {
+    defensemenBody.innerHTML = defensemen.map(renderPlayerRow).join('');
 }
 
 /**
@@ -231,7 +262,9 @@ function renderTable() {
 function setupSortHandlers() {
     document.querySelectorAll('th[data-sort]').forEach(header => {
         header.addEventListener('click', () => {
-            sortPlayers(header.dataset.sort);
+            const tableType = header.dataset.table;
+            const field = header.dataset.sort;
+            sortTable(tableType, field);
         });
     });
 }
@@ -247,13 +280,26 @@ async function fetchPlayers() {
         }
 
         const data = await response.json();
-        players = data.players;
+        allPlayers = data.players;
+
+        // Split into forwards and defensemen
+        forwards = allPlayers.filter(p => ['C', 'L', 'R'].includes(p.position));
+        defensemen = allPlayers.filter(p => p.position === 'D');
 
         // Update last updated time
         lastUpdatedEl.textContent = formatRelativeTime(data.last_updated);
 
         // Sort by points by default
-        sortPlayers('points');
+        sortPlayersArray(forwards, 'points', 'desc');
+        sortPlayersArray(defensemen, 'points', 'desc');
+
+        // Render both tables
+        renderForwards();
+        renderDefensemen();
+
+        // Update sort indicators
+        updateSortIndicators('forwards');
+        updateSortIndicators('defensemen');
 
         // Show table, hide loading
         loadingEl.classList.add('hidden');

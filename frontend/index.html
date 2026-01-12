@@ -51,40 +51,81 @@
             <p class="text-red-400">Failed to load player data. Please try again later.</p>
         </div>
 
-        <!-- Stats Table -->
-        <div id="table-container" class="hidden overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="sticky top-0 z-10">
-                    <tr class="bg-caps-navy text-left">
-                        <!-- Traditional Stats -->
-                        <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number">#</th>
-                        <th class="table-header min-w-[150px]" data-sort="name">Name</th>
-                        <th class="table-header" data-sort="position">Pos</th>
-                        <th class="table-header" data-sort="games_played">GP</th>
-                        <th class="table-header" data-sort="avg_toi">TOI</th>
-                        <th class="table-header" data-sort="goals">G</th>
-                        <th class="table-header" data-sort="assists">A</th>
-                        <th class="table-header" data-sort="points">P</th>
-                        <th class="table-header" data-sort="plus_minus">+/-</th>
-                        <th class="table-header" data-sort="hits">Hits</th>
-                        <th class="table-header" data-sort="pim">PIM</th>
-                        <th class="table-header" data-sort="faceoff_win_pct">FO%</th>
-                        <!-- Edge Stats -->
-                        <th class="table-header edge-header" data-sort="top_speed_mph">Top Speed</th>
-                        <th class="table-header edge-header" data-sort="bursts_20_plus">Bursts 20+</th>
-                        <th class="table-header edge-header" data-sort="bursts_22_plus">Bursts 22+</th>
-                        <th class="table-header edge-header" data-sort="distance_per_game_miles">Dist/G</th>
-                        <th class="table-header edge-header" data-sort="off_zone_time_pct">O-Zone%</th>
-                        <th class="table-header edge-header" data-sort="def_zone_time_pct">D-Zone%</th>
-                        <th class="table-header edge-header" data-sort="zone_starts_off_pct">ZS%</th>
-                        <th class="table-header edge-header" data-sort="top_shot_speed_mph">Shot Speed</th>
-                        <th class="table-header edge-header" data-sort="hustle_score">Hustle</th>
-                    </tr>
-                </thead>
-                <tbody id="players-body">
-                    <!-- Players will be inserted here -->
-                </tbody>
-            </table>
+        <!-- Stats Tables -->
+        <div id="table-container" class="hidden space-y-8">
+            <!-- Forwards Section -->
+            <div>
+                <h2 class="text-xl font-bold text-caps-red mb-3">Forwards</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm" id="forwards-table">
+                        <thead class="sticky top-0 z-10">
+                            <tr class="bg-caps-navy text-left">
+                                <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number" data-table="forwards">#</th>
+                                <th class="table-header min-w-[150px]" data-sort="name" data-table="forwards">Name</th>
+                                <th class="table-header" data-sort="position" data-table="forwards">Pos</th>
+                                <th class="table-header" data-sort="games_played" data-table="forwards">GP</th>
+                                <th class="table-header" data-sort="avg_toi" data-table="forwards">TOI</th>
+                                <th class="table-header" data-sort="goals" data-table="forwards">G</th>
+                                <th class="table-header" data-sort="assists" data-table="forwards">A</th>
+                                <th class="table-header" data-sort="points" data-table="forwards">P</th>
+                                <th class="table-header" data-sort="plus_minus" data-table="forwards">+/-</th>
+                                <th class="table-header" data-sort="hits" data-table="forwards">Hits</th>
+                                <th class="table-header" data-sort="pim" data-table="forwards">PIM</th>
+                                <th class="table-header" data-sort="faceoff_win_pct" data-table="forwards">FO%</th>
+                                <th class="table-header edge-header" data-sort="top_speed_mph" data-table="forwards">Top Speed</th>
+                                <th class="table-header edge-header" data-sort="bursts_20_plus" data-table="forwards">Bursts 20+</th>
+                                <th class="table-header edge-header" data-sort="bursts_22_plus" data-table="forwards">Bursts 22+</th>
+                                <th class="table-header edge-header" data-sort="distance_per_game_miles" data-table="forwards">Dist/G</th>
+                                <th class="table-header edge-header" data-sort="off_zone_time_pct" data-table="forwards">O-Zone%</th>
+                                <th class="table-header edge-header" data-sort="def_zone_time_pct" data-table="forwards">D-Zone%</th>
+                                <th class="table-header edge-header" data-sort="zone_starts_off_pct" data-table="forwards">ZS%</th>
+                                <th class="table-header edge-header" data-sort="top_shot_speed_mph" data-table="forwards">Shot Speed</th>
+                                <th class="table-header edge-header" data-sort="hustle_score" data-table="forwards">Hustle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forwards-body">
+                            <!-- Forwards will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Defensemen Section -->
+            <div>
+                <h2 class="text-xl font-bold text-caps-red mb-3">Defensemen</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm" id="defensemen-table">
+                        <thead class="sticky top-0 z-10">
+                            <tr class="bg-caps-navy text-left">
+                                <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number" data-table="defensemen">#</th>
+                                <th class="table-header min-w-[150px]" data-sort="name" data-table="defensemen">Name</th>
+                                <th class="table-header" data-sort="position" data-table="defensemen">Pos</th>
+                                <th class="table-header" data-sort="games_played" data-table="defensemen">GP</th>
+                                <th class="table-header" data-sort="avg_toi" data-table="defensemen">TOI</th>
+                                <th class="table-header" data-sort="goals" data-table="defensemen">G</th>
+                                <th class="table-header" data-sort="assists" data-table="defensemen">A</th>
+                                <th class="table-header" data-sort="points" data-table="defensemen">P</th>
+                                <th class="table-header" data-sort="plus_minus" data-table="defensemen">+/-</th>
+                                <th class="table-header" data-sort="hits" data-table="defensemen">Hits</th>
+                                <th class="table-header" data-sort="pim" data-table="defensemen">PIM</th>
+                                <th class="table-header" data-sort="faceoff_win_pct" data-table="defensemen">FO%</th>
+                                <th class="table-header edge-header" data-sort="top_speed_mph" data-table="defensemen">Top Speed</th>
+                                <th class="table-header edge-header" data-sort="bursts_20_plus" data-table="defensemen">Bursts 20+</th>
+                                <th class="table-header edge-header" data-sort="bursts_22_plus" data-table="defensemen">Bursts 22+</th>
+                                <th class="table-header edge-header" data-sort="distance_per_game_miles" data-table="defensemen">Dist/G</th>
+                                <th class="table-header edge-header" data-sort="off_zone_time_pct" data-table="defensemen">O-Zone%</th>
+                                <th class="table-header edge-header" data-sort="def_zone_time_pct" data-table="defensemen">D-Zone%</th>
+                                <th class="table-header edge-header" data-sort="zone_starts_off_pct" data-table="defensemen">ZS%</th>
+                                <th class="table-header edge-header" data-sort="top_shot_speed_mph" data-table="defensemen">Shot Speed</th>
+                                <th class="table-header edge-header" data-sort="hustle_score" data-table="defensemen">Hustle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="defensemen-body">
+                            <!-- Defensemen will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Legend -->
