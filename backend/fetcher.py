@@ -118,7 +118,19 @@ def fetch_traditional_stats(client: NHLClient, player_ids: list) -> dict:
         realtime = realtime_data.get(player_id, {})
 
         if not summary:
-            logger.warning(f"No summary stats for player {player_id}")
+            logger.warning(f"No summary stats for player {player_id} - may not have played this season")
+            # Still create entry with null values so player shows in table
+            stats[player_id] = {
+                "games_played": 0,
+                "avg_toi": None,
+                "goals": 0,
+                "assists": 0,
+                "points": 0,
+                "plus_minus": 0,
+                "hits": 0,
+                "pim": 0,
+                "faceoff_win_pct": None
+            }
             continue
 
         # TOI is in seconds, convert to minutes

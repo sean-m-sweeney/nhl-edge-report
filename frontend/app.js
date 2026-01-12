@@ -91,8 +91,8 @@ function renderPlayerRow(player) {
 
     return `
         <tr class="table-row border-b border-dark-border hover:bg-dark-card/50">
-            <td class="table-cell sticky left-0 bg-dark-bg">${player.jersey_number || '-'}</td>
-            <td class="table-cell sticky left-12 bg-dark-bg">
+            <td class="table-cell sticky left-0 bg-dark-bg w-10">${player.jersey_number || '-'}</td>
+            <td class="table-cell min-w-[150px]">
                 <a href="${getHockeyRefUrl(player.name)}"
                    target="_blank"
                    rel="noopener"
