@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caps Edge - NHL Edge Stats for Washington Capitals</title>
+    <title>Chel Edge - NHL Edge Stats</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="styles.css">
     <script>
@@ -28,8 +28,8 @@
         <div class="container mx-auto px-4 py-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 class="text-3xl md:text-4xl font-bold text-caps-red">Caps Edge</h1>
-                    <p class="text-gray-400 mt-1">NHL Edge Stats for Washington Capitals</p>
+                    <h1 class="text-3xl md:text-4xl font-bold text-caps-red">Chel Edge</h1>
+                    <p class="text-gray-400 mt-1">NHL Edge stats in a comprehensive, sortable format</p>
                 </div>
                 <div class="mt-4 md:mt-0 text-sm text-gray-400">
                     <span id="last-updated">Loading...</span>
@@ -37,6 +37,39 @@
             </div>
         </div>
     </header>
+
+    <!-- Filter Bar -->
+    <div class="bg-dark-card border-b border-dark-border">
+        <div class="max-w-[1800px] mx-auto px-4 py-3">
+            <div class="flex flex-wrap items-center gap-3">
+                <label class="text-sm text-gray-400">View:</label>
+                <select id="filter-type" class="bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
+                    <option value="team">Team</option>
+                    <option value="division">Division</option>
+                    <option value="conference">Conference</option>
+                    <option value="league">League</option>
+                </select>
+
+                <select id="filter-team" class="bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
+                    <option value="WSH">Washington Capitals</option>
+                </select>
+
+                <select id="filter-division" class="hidden bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
+                    <option value="Metropolitan">Metropolitan</option>
+                    <option value="Atlantic">Atlantic</option>
+                    <option value="Central">Central</option>
+                    <option value="Pacific">Pacific</option>
+                </select>
+
+                <select id="filter-conference" class="hidden bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
+                    <option value="Eastern">Eastern Conference</option>
+                    <option value="Western">Western Conference</option>
+                </select>
+
+                <span id="player-count" class="text-sm text-gray-500 ml-auto"></span>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="max-w-[1800px] mx-auto px-4 py-6">
@@ -56,8 +89,13 @@
             <button class="info-toggle" id="info-toggle">How to read this data ▼</button>
             <div class="info-content" id="info-content">
                 <div class="info-block">
-                    <h3>Understanding the Numbers</h3>
-                    <p>Each stat shows the raw value followed by a <span class="percentile-example">(percentile)</span> in parentheses. The percentile tells you how a player ranks league-wide among all NHL skaters with 10+ games played.</p>
+                    <h3>What is Chel Edge?</h3>
+                    <p>Chel Edge combines traditional NHL stats with NHL Edge tracking data in one sortable view. Filter by team, division, conference, or view the entire league. Click any column header to sort.</p>
+                </div>
+
+                <div class="info-block">
+                    <h3>Understanding Percentiles</h3>
+                    <p>Many stats show the raw value followed by a <span class="percentile-example">(percentile)</span> in parentheses. The percentile tells you how a player ranks league-wide among all NHL skaters with 10+ games played.</p>
                     <ul>
                         <li><strong>90th percentile</strong> = Top 10% in the league</li>
                         <li><strong>50th percentile</strong> = League average</li>
@@ -67,40 +105,14 @@
                 </div>
 
                 <div class="info-block">
-                    <h3>Motor Index</h3>
-                    <p>Motor Index measures a player's effort and activity level <em>relative to their position</em>. It answers the question: "Is this player working harder than others who play the same role?"</p>
-
-                    <p><strong>The formula combines five components:</strong></p>
+                    <h3>Stats Glossary</h3>
                     <ul>
-                        <li><strong>Speed Bursts (25%)</strong> — Explosive skating efforts over 20 mph per 60 minutes</li>
-                        <li><strong>Distance (20%)</strong> — Miles skated per game</li>
-                        <li><strong>Hits (20%)</strong> — Physical engagement per 60 minutes</li>
-                        <li><strong>Shots (20%)</strong> — Shot attempts per 60 minutes, measuring offensive aggression</li>
-                        <li><strong>O-Zone Time (15%)</strong> — Percentage of time spent in the offensive zone</li>
-                    </ul>
-
-                    <p>Each component is compared to the league average <em>for that player's position</em>. A center's hits are compared to other centers, not to defensemen or wingers.</p>
-
-                    <p><strong>How to interpret the score:</strong></p>
-                    <ul>
-                        <li><strong>60+</strong> — Elite motor. This player consistently outworks their peers.</li>
-                        <li><strong>50-59</strong> — Above average effort for their position.</li>
-                        <li><strong>40-49</strong> — Average. Doing what's expected for the role.</li>
-                        <li><strong>Below 40</strong> — Below average activity. May indicate a skill-over-effort player, limited ice time role, or declining compete level.</li>
-                    </ul>
-
-                    <p><em>Note: Motor Index measures activity and effort, not skill or effectiveness. A high motor doesn't guarantee points, and a low motor doesn't mean a player is bad — some elite players produce efficiently without high activity rates.</em></p>
-                </div>
-
-                <div class="info-block">
-                    <h3>NHL Edge Stats Glossary</h3>
-                    <ul>
+                        <li><strong>TOI</strong> — Average time on ice per game (minutes)</li>
+                        <li><strong>P/60</strong> — Points per 60 minutes of ice time. Normalizes production regardless of ice time.</li>
                         <li><strong>Top Speed</strong> — Fastest skating speed recorded this season (mph)</li>
-                        <li><strong>Bursts 20+</strong> — Number of times player exceeded 20 mph</li>
-                        <li><strong>Bursts 22+</strong> — Number of times player exceeded 22 mph (elite speed)</li>
+                        <li><strong>Bursts 20+/22+</strong> — Number of times player exceeded 20 or 22 mph</li>
                         <li><strong>Dist/G</strong> — Average miles skated per game</li>
-                        <li><strong>O-Zone%</strong> — Percentage of 5v5 time spent in offensive zone</li>
-                        <li><strong>D-Zone%</strong> — Percentage of 5v5 time spent in defensive zone</li>
+                        <li><strong>O-Zone% / D-Zone%</strong> — Percentage of 5v5 time spent in offensive/defensive zone</li>
                         <li><strong>ZS%</strong> — Offensive zone start percentage (higher = more o-zone faceoffs)</li>
                         <li><strong>Shot Speed</strong> — Fastest shot recorded this season (mph)</li>
                         <li><strong>Shots/60</strong> — Shot attempts per 60 minutes of ice time</li>
@@ -120,12 +132,14 @@
                             <tr class="bg-caps-navy text-left">
                                 <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number" data-table="forwards">#</th>
                                 <th class="table-header min-w-[150px]" data-sort="name" data-table="forwards">Name</th>
+                                <th class="table-header team-col hidden" data-sort="team_abbr" data-table="forwards">Team</th>
                                 <th class="table-header" data-sort="position" data-table="forwards">Pos</th>
                                 <th class="table-header" data-sort="games_played" data-table="forwards">GP</th>
                                 <th class="table-header" data-sort="avg_toi" data-table="forwards">TOI</th>
                                 <th class="table-header" data-sort="goals" data-table="forwards">G</th>
                                 <th class="table-header" data-sort="assists" data-table="forwards">A</th>
                                 <th class="table-header" data-sort="points" data-table="forwards">P</th>
+                                <th class="table-header" data-sort="p60" data-table="forwards">P/60</th>
                                 <th class="table-header" data-sort="plus_minus" data-table="forwards">+/-</th>
                                 <th class="table-header" data-sort="hits" data-table="forwards">Hits</th>
                                 <th class="table-header" data-sort="pim" data-table="forwards">PIM</th>
@@ -139,7 +153,6 @@
                                 <th class="table-header edge-header" data-sort="def_zone_time_pct" data-table="forwards">D-Zone%</th>
                                 <th class="table-header edge-header" data-sort="zone_starts_off_pct" data-table="forwards">ZS%</th>
                                 <th class="table-header edge-header" data-sort="top_shot_speed_mph" data-table="forwards">Shot Speed</th>
-                                <th class="table-header edge-header" data-sort="motor_index" data-table="forwards">Motor</th>
                             </tr>
                         </thead>
                         <tbody id="forwards-body">
@@ -158,12 +171,14 @@
                             <tr class="bg-caps-navy text-left">
                                 <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number" data-table="defensemen">#</th>
                                 <th class="table-header min-w-[150px]" data-sort="name" data-table="defensemen">Name</th>
+                                <th class="table-header team-col hidden" data-sort="team_abbr" data-table="defensemen">Team</th>
                                 <th class="table-header" data-sort="position" data-table="defensemen">Pos</th>
                                 <th class="table-header" data-sort="games_played" data-table="defensemen">GP</th>
                                 <th class="table-header" data-sort="avg_toi" data-table="defensemen">TOI</th>
                                 <th class="table-header" data-sort="goals" data-table="defensemen">G</th>
                                 <th class="table-header" data-sort="assists" data-table="defensemen">A</th>
                                 <th class="table-header" data-sort="points" data-table="defensemen">P</th>
+                                <th class="table-header" data-sort="p60" data-table="defensemen">P/60</th>
                                 <th class="table-header" data-sort="plus_minus" data-table="defensemen">+/-</th>
                                 <th class="table-header" data-sort="hits" data-table="defensemen">Hits</th>
                                 <th class="table-header" data-sort="pim" data-table="defensemen">PIM</th>
@@ -177,7 +192,6 @@
                                 <th class="table-header edge-header" data-sort="def_zone_time_pct" data-table="defensemen">D-Zone%</th>
                                 <th class="table-header edge-header" data-sort="zone_starts_off_pct" data-table="defensemen">ZS%</th>
                                 <th class="table-header edge-header" data-sort="top_shot_speed_mph" data-table="defensemen">Shot Speed</th>
-                                <th class="table-header edge-header" data-sort="motor_index" data-table="defensemen">Motor</th>
                             </tr>
                         </thead>
                         <tbody id="defensemen-body">
@@ -206,7 +220,7 @@
                 </div>
             </div>
             <p class="text-xs text-gray-500 mt-2">
-                Motor Index = Bursts/60 (25%) + Distance/G (20%) + Hits/60 (20%) + Shots/60 (20%) + O-Zone% (15%) — compared to position average
+                Data refreshed daily. Only includes skaters with 10+ games played.
             </p>
         </div>
     </main>
@@ -217,7 +231,7 @@
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 <!-- Ko-fi Button -->
                 <div>
-                    <a href="https://ko-fi.com/capsedge" target="_blank" rel="noopener"
+                    <a href="https://ko-fi.com/cheledge" target="_blank" rel="noopener"
                        class="inline-flex items-center gap-2 px-4 py-2 bg-[#FF5E5B] hover:bg-[#ff4744] text-white rounded-lg transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311z"/>
@@ -228,8 +242,8 @@
 
                 <!-- Disclaimer -->
                 <div class="text-xs text-gray-500 text-center md:text-right">
-                    <p>Data sourced from NHL Edge. Not affiliated with the NHL or Washington Capitals.</p>
-                    <p class="mt-1">&copy; 2026 Caps Edge</p>
+                    <p>Data sourced from NHL Edge. Not affiliated with the NHL.</p>
+                    <p class="mt-1">&copy; 2026 Chel Edge</p>
                 </div>
             </div>
         </div>

@@ -1,4 +1,4 @@
-"""NHL API data fetching for Caps Edge."""
+"""NHL API data fetching for Caps Edge - League Edition."""
 
 import logging
 from datetime import datetime
@@ -9,19 +9,12 @@ from nhlpy.api.query.filters.game_type import GameTypeQuery
 from nhlpy.api.query.filters.season import SeasonQuery
 
 from backend import database
-from backend.motor import (
-    calculate_motor_index,
-    calculate_position_averages,
-    calculate_percentile,
-    calculate_shots_percentile
-)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Washington Capitals
-CAPS_TEAM_ABBR = "WSH"
-CAPS_FRANCHISE_ID = "24"
+# Minimum games played to be included
+MIN_GAMES_PLAYED = 10
 
 # Current season
 CURRENT_SEASON = "20252026"
@@ -37,87 +30,150 @@ def get_current_season() -> str:
         return f"{now.year - 1}{now.year}"
 
 
-def fetch_caps_roster(client: NHLClient) -> list:
+def calculate_percentile(value: float, sorted_values: list) -> Optional[int]:
     """
-    Fetch current Washington Capitals roster.
+    Calculate percentile ranking for a value within a sorted list.
+
+    Returns percentile as integer 0-100.
+    """
+    if not sorted_values or value is None:
+        return None
+
+    # Count how many values are below this value
+    count_below = sum(1 for v in sorted_values if v < value)
+    percentile = (count_below / len(sorted_values)) * 100
+    return int(round(percentile))
+
+
+def fetch_all_league_skaters(client: NHLClient) -> list:
+    """
+    Fetch all NHL skaters with their team info.
 
     Returns:
-        List of player dicts with id, name, position, jersey_number
+        List of player dicts with id, name, position, team_abbr, jersey_number
     """
-    logger.info("Fetching Caps roster...")
+    logger.info("Fetching all league skaters...")
     season = get_current_season()
 
+    filters = [
+        SeasonQuery(season_start=season, season_end=season),
+        GameTypeQuery(game_type="2"),
+    ]
+
+    qb = QueryBuilder()
+    query_ctx = qb.build(filters=filters)
+
     try:
-        roster = client.teams.team_roster(team_abbr=CAPS_TEAM_ABBR, season=season)
+        # Paginate through all skaters
+        all_skaters = []
+        for start in range(0, 1500, 100):
+            result = client.stats.skater_stats_with_query_context(
+                query_context=query_ctx,
+                report_type="summary",
+                limit=100,
+                start=start
+            )
+            batch = result.get("data", [])
+            if not batch:
+                break
+            all_skaters.extend(batch)
+            logger.info(f"Fetched skater batch: {len(batch)} players (offset {start})")
+
     except Exception as e:
-        logger.error(f"Error fetching roster: {e}")
+        logger.error(f"Error fetching league skaters: {e}")
         return []
 
     players = []
+    for skater in all_skaters:
+        games_played = skater.get("gamesPlayed", 0)
+        if games_played < MIN_GAMES_PLAYED:
+            continue
 
-    # Process forwards
-    for player in roster.get("forwards", []):
+        # Get position (skip goalies)
+        position = skater.get("positionCode", "")
+        if position == "G":
+            continue
+
+        team_abbr = skater.get("teamAbbrevs", "")
+        # If player played for multiple teams, get the most recent one
+        if "," in team_abbr:
+            team_abbr = team_abbr.split(",")[-1].strip()
+
         players.append({
-            "player_id": player["id"],
-            "name": f"{player['firstName']['default']} {player['lastName']['default']}",
-            "position": player["positionCode"],
-            "jersey_number": player.get("sweaterNumber")
+            "player_id": skater.get("playerId"),
+            "name": f"{skater.get('skaterFullName', '')}",
+            "position": position,
+            "team_abbr": team_abbr,
+            "jersey_number": None  # Not in summary stats, will fetch from roster if needed
         })
 
-    # Process defensemen
-    for player in roster.get("defensemen", []):
-        players.append({
-            "player_id": player["id"],
-            "name": f"{player['firstName']['default']} {player['lastName']['default']}",
-            "position": player["positionCode"],
-            "jersey_number": player.get("sweaterNumber")
-        })
-
-    # Skip goalies for v1
-    logger.info(f"Found {len(players)} skaters on roster")
+    logger.info(f"Found {len(players)} qualified skaters across the league")
     return players
 
 
-def fetch_traditional_stats(client: NHLClient, player_ids: list) -> dict:
+def fetch_team_rosters(client: NHLClient, team_abbrs: list) -> dict:
     """
-    Fetch traditional stats for players.
+    Fetch jersey numbers from team rosters.
+
+    Returns:
+        Dict mapping player_id to jersey_number
+    """
+    logger.info(f"Fetching roster details for {len(team_abbrs)} teams...")
+    season = get_current_season()
+
+    jersey_map = {}
+    for team_abbr in team_abbrs:
+        try:
+            roster = client.teams.team_roster(team_abbr=team_abbr, season=season)
+            for group in ["forwards", "defensemen"]:
+                for player in roster.get(group, []):
+                    jersey_map[player["id"]] = player.get("sweaterNumber")
+        except Exception as e:
+            logger.warning(f"Error fetching roster for {team_abbr}: {e}")
+            continue
+
+    logger.info(f"Got jersey numbers for {len(jersey_map)} players")
+    return jersey_map
+
+
+def fetch_traditional_stats(client: NHLClient) -> dict:
+    """
+    Fetch traditional stats for all league skaters.
 
     Returns:
         Dict mapping player_id to stats dict
     """
-    logger.info("Fetching traditional stats...")
+    logger.info("Fetching traditional stats for all skaters...")
     season = get_current_season()
 
+    filters = [
+        SeasonQuery(season_start=season, season_end=season),
+        GameTypeQuery(game_type="2"),
+    ]
+    qb = QueryBuilder()
+    query_ctx = qb.build(filters=filters)
+
     try:
-        # Paginate through all summary stats (API caps at 100 per request)
+        # Paginate through all summary stats
         all_summary = []
-        for start in range(0, 1000, 100):
-            batch = client.stats.skater_stats_summary(
-                start_season=season,
-                end_season=season,
-                game_type_id=2,
+        for start in range(0, 1500, 100):
+            result = client.stats.skater_stats_with_query_context(
+                query_context=query_ctx,
+                report_type="summary",
                 limit=100,
                 start=start
             )
+            batch = result.get("data", [])
             if not batch:
                 break
             all_summary.extend(batch)
-            logger.info(f"Fetched summary stats batch: {len(batch)} players (offset {start})")
 
         summary_data = {p["playerId"]: p for p in all_summary}
         logger.info(f"Total summary stats: {len(summary_data)} players")
 
         # Paginate through realtime stats (hits, blocks, etc.)
-        # Use the query context method for realtime since skater_stats_summary doesn't have it
-        filters = [
-            SeasonQuery(season_start=season, season_end=season),
-            GameTypeQuery(game_type="2"),
-        ]
-        qb = QueryBuilder()
-        query_ctx = qb.build(filters=filters)
-
         all_realtime = []
-        for start in range(0, 1000, 100):
+        for start in range(0, 1500, 100):
             result = client.stats.skater_stats_with_query_context(
                 query_context=query_ctx,
                 report_type="realtime",
@@ -137,52 +193,41 @@ def fetch_traditional_stats(client: NHLClient, player_ids: list) -> dict:
         return {}
 
     stats = {}
-    for player_id in player_ids:
-        summary = summary_data.get(player_id, {})
+    for player_id, summary in summary_data.items():
         realtime = realtime_data.get(player_id, {})
-
-        if not summary:
-            logger.warning(f"No summary stats for player {player_id} - may not have played this season")
-            # Still create entry with null values so player shows in table
-            stats[player_id] = {
-                "games_played": 0,
-                "avg_toi": None,
-                "goals": 0,
-                "assists": 0,
-                "points": 0,
-                "plus_minus": 0,
-                "hits": 0,
-                "pim": 0,
-                "faceoff_win_pct": None,
-                "shots": 0,
-                "shots_per_60": None
-            }
-            continue
 
         # TOI is in seconds, convert to minutes
         toi_seconds = summary.get("timeOnIcePerGame", 0)
         avg_toi = toi_seconds / 60 if toi_seconds else None
 
-        # Calculate shots per 60
+        # Calculate shots per 60 and P/60
         games_played = summary.get("gamesPlayed", 0)
         shots = summary.get("shots", 0)
+        points = summary.get("points", 0)
         shots_per_60 = None
+        p60 = None
+        toi_per_game = avg_toi  # Already in minutes
+
         if games_played > 0 and avg_toi and avg_toi > 0:
             minutes_played = games_played * avg_toi
-            shots_per_60 = round((shots / minutes_played) * 60, 2) if minutes_played > 0 else None
+            if minutes_played > 0:
+                shots_per_60 = round((shots / minutes_played) * 60, 2)
+                p60 = round((points / minutes_played) * 60, 2)
 
         stats[player_id] = {
             "games_played": games_played,
             "avg_toi": avg_toi,
             "goals": summary.get("goals"),
             "assists": summary.get("assists"),
-            "points": summary.get("points"),
+            "points": points,
             "plus_minus": summary.get("plusMinus"),
             "hits": realtime.get("hits"),
             "pim": summary.get("penaltyMinutes"),
             "faceoff_win_pct": summary.get("faceoffWinPct"),
             "shots": shots,
-            "shots_per_60": shots_per_60
+            "shots_per_60": shots_per_60,
+            "p60": p60,
+            "toi_per_game": toi_per_game
         }
 
     logger.info(f"Got traditional stats for {len(stats)} players")
@@ -267,238 +312,130 @@ def fetch_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]:
     }
 
 
-def fetch_league_stats_for_motor(client: NHLClient) -> list:
-    """
-    Fetch league-wide stats needed for Motor Index calculation.
-
-    Returns:
-        List of player dicts with stats needed for Motor calculation
-    """
-    logger.info("Fetching league-wide stats for Motor Index calculation...")
-    season = get_current_season()
-
-    filters = [
-        SeasonQuery(season_start=season, season_end=season),
-        GameTypeQuery(game_type="2"),
-    ]
-
-    qb = QueryBuilder()
-    query_ctx = qb.build(filters=filters)
-
-    try:
-        # Get all skaters with summary stats (paginate)
-        all_summary = []
-        for start in range(0, 1000, 100):
-            result = client.stats.skater_stats_with_query_context(
-                query_context=query_ctx,
-                report_type="summary",
-                limit=100,
-                start=start
-            )
-            batch = result.get("data", [])
-            if not batch:
-                break
-            all_summary.extend(batch)
-
-        summary_data = {p["playerId"]: p for p in all_summary}
-        logger.info(f"Fetched {len(summary_data)} players for Motor calculation")
-
-        # Get realtime stats (hits)
-        all_realtime = []
-        for start in range(0, 1000, 100):
-            result = client.stats.skater_stats_with_query_context(
-                query_context=query_ctx,
-                report_type="realtime",
-                limit=100,
-                start=start
-            )
-            batch = result.get("data", [])
-            if not batch:
-                break
-            all_realtime.extend(batch)
-
-        realtime_data = {p["playerId"]: p for p in all_realtime}
-
-    except Exception as e:
-        logger.error(f"Error fetching league stats: {e}")
-        return []
-
-    players = []
-    for player_id, summary in summary_data.items():
-        games_played = summary.get("gamesPlayed", 0)
-        if games_played < 10:
-            continue
-
-        toi_seconds = summary.get("timeOnIcePerGame", 0)
-        avg_toi = toi_seconds / 60 if toi_seconds else 0
-
-        realtime = realtime_data.get(player_id, {})
-
-        players.append({
-            "player_id": player_id,
-            "position": summary.get("positionCode"),
-            "games_played": games_played,
-            "avg_toi": avg_toi,
-            "hits": realtime.get("hits", 0),
-            "shots": summary.get("shots", 0)
-        })
-
-    logger.info(f"Got league stats for {len(players)} qualified players")
-    return players
-
-
 def refresh_data():
     """
-    Main refresh function - fetches all data and updates database.
+    Main refresh function - fetches all league data and updates database.
 
     Returns:
         Number of players updated
     """
-    logger.info("Starting data refresh...")
+    logger.info("Starting full league data refresh...")
     client = NHLClient()
 
-    # 1. Get Caps roster
-    roster = fetch_caps_roster(client)
-    if not roster:
-        logger.error("Failed to fetch roster")
+    # 1. Get all league skaters with 10+ games
+    all_skaters = fetch_all_league_skaters(client)
+    if not all_skaters:
+        logger.error("Failed to fetch league skaters")
         return 0
 
-    # Save players to database
-    for player in roster:
+    # 2. Get traditional stats for all players
+    trad_stats = fetch_traditional_stats(client)
+
+    # 3. Get unique teams and fetch jersey numbers
+    unique_teams = list(set(p["team_abbr"] for p in all_skaters if p["team_abbr"]))
+    jersey_map = fetch_team_rosters(client, unique_teams)
+
+    # 4. Collect all P/60 and TOI values for percentile calculation
+    all_p60 = []
+    forward_toi = []
+    defensemen_toi = []
+
+    for player in all_skaters:
+        player_id = player["player_id"]
+        if player_id in trad_stats:
+            trad = trad_stats[player_id]
+            if trad.get("p60") is not None:
+                all_p60.append(trad["p60"])
+            if trad.get("toi_per_game") is not None:
+                if player["position"] in ['C', 'L', 'R']:
+                    forward_toi.append(trad["toi_per_game"])
+                elif player["position"] == 'D':
+                    defensemen_toi.append(trad["toi_per_game"])
+
+    # Sort for percentile calculation
+    all_p60.sort()
+    forward_toi.sort()
+    defensemen_toi.sort()
+
+    logger.info(f"P/60 samples: {len(all_p60)}, Forward TOI samples: {len(forward_toi)}, D TOI samples: {len(defensemen_toi)}")
+
+    # 5. Save all players to database with percentiles
+    logger.info(f"Saving {len(all_skaters)} players to database...")
+    for player in all_skaters:
+        player_id = player["player_id"]
+        # Get jersey number from roster data
+        jersey_number = jersey_map.get(player_id, player.get("jersey_number"))
+
         database.upsert_player(
-            player_id=player["player_id"],
+            player_id=player_id,
             name=player["name"],
             position=player["position"],
-            jersey_number=player["jersey_number"]
+            jersey_number=jersey_number,
+            team_abbr=player.get("team_abbr")
         )
 
-    player_ids = [p["player_id"] for p in roster]
-
-    # 2. Get traditional stats
-    trad_stats = fetch_traditional_stats(client, player_ids)
-
-    # 3. Get Edge stats for each player
-    edge_stats = {}
-    for player_id in player_ids:
-        stats = fetch_edge_stats(client, player_id)
-        if stats:
-            edge_stats[player_id] = stats
-        logger.info(f"Fetched Edge stats for player {player_id}")
-
-    # 4. Get league-wide stats for Motor Index calculation
-    league_players = fetch_league_stats_for_motor(client)
-
-    # 5. Fetch Edge stats for league players (sample for position averages)
-    logger.info("Fetching Edge stats for league Motor Index calculation...")
-    league_with_edge = []
-    sample_count = 0
-    max_samples = 150  # Sample 150 players for position averages
-
-    for player in league_players:
-        player_id = player["player_id"]
-        if sample_count < max_samples:
-            edge = fetch_edge_stats(client, player_id)
-            if edge:
-                player["bursts_20_plus"] = edge.get("bursts_20_plus", 0)
-                player["distance_per_game_miles"] = edge.get("distance_per_game_miles", 0)
-                player["off_zone_time_pct"] = edge.get("off_zone_time_pct", 0)
-                league_with_edge.append(player)
-                sample_count += 1
-        else:
-            break
-
-    logger.info(f"Collected Edge stats for {len(league_with_edge)} league players")
-
-    # 6. Calculate position averages
-    position_avgs = calculate_position_averages(league_with_edge)
-    logger.info(f"Position averages: {position_avgs}")
-
-    # Save position averages to database
-    database.clear_position_averages()
-    for position, avgs in position_avgs.items():
-        database.insert_position_averages(position, avgs)
-
-    # 7. Calculate Motor Index for all league players and store
-    database.clear_league_stats()
-    all_motor_scores = []
-    all_shots_per_60 = []
-
-    for player in league_with_edge:
-        # Calculate shots_per_60 for this player
-        games_played = player.get("games_played", 0)
-        avg_toi = player.get("avg_toi", 0)
-        shots = player.get("shots", 0)
-
-        if games_played > 0 and avg_toi > 0:
-            minutes_played = games_played * avg_toi
-            shots_per_60 = (shots / minutes_played) * 60 if minutes_played > 0 else 0
-            all_shots_per_60.append(shots_per_60)
-        else:
-            shots_per_60 = 0
-
-        motor = calculate_motor_index(
-            position=player.get("position"),
-            games_played=games_played,
-            avg_toi=avg_toi,
-            bursts_20_plus=player.get("bursts_20_plus", 0) or 0,
-            distance_per_game=player.get("distance_per_game_miles", 0) or 0,
-            hits=player.get("hits", 0) or 0,
-            shots=shots,
-            off_zone_time_pct=player.get("off_zone_time_pct", 0) or 0,
-            position_avgs=position_avgs
-        )
-
-        if motor is not None:
-            player["motor_index"] = motor
-            all_motor_scores.append(motor)
-            database.insert_league_stats(player["player_id"], player)
-
-    all_motor_scores.sort()
-    logger.info(f"Calculated Motor Index for {len(all_motor_scores)} league players")
-
-    # 8. Save Caps player data with Motor Index and percentiles
-    players_updated = 0
-    for player_id in player_ids:
-        # Get player info
-        player_info = next((p for p in roster if p["player_id"] == player_id), {})
-
-        # Save traditional stats
+        # Calculate and add percentiles to traditional stats
         if player_id in trad_stats:
-            database.upsert_player_stats(player_id, trad_stats[player_id])
+            trad = trad_stats[player_id]
 
-        # Calculate and save Edge stats with Motor Index
+            # P/60 percentile (all skaters)
+            if trad.get("p60") is not None:
+                trad["p60_percentile"] = calculate_percentile(trad["p60"], all_p60)
+
+            # TOI/G percentile (by position)
+            if trad.get("toi_per_game") is not None:
+                if player["position"] in ['C', 'L', 'R']:
+                    trad["toi_per_game_percentile"] = calculate_percentile(trad["toi_per_game"], forward_toi)
+                elif player["position"] == 'D':
+                    trad["toi_per_game_percentile"] = calculate_percentile(trad["toi_per_game"], defensemen_toi)
+
+            database.upsert_player_stats(player_id, trad)
+
+    # 6. Fetch Edge stats for ALL qualified players
+    logger.info(f"Fetching Edge stats for {len(all_skaters)} players (this will take a while)...")
+    edge_stats = {}
+
+    for i, player in enumerate(all_skaters):
+        player_id = player["player_id"]
+        edge = fetch_edge_stats(client, player_id)
+        if edge:
+            edge_stats[player_id] = edge
+
+        if (i + 1) % 50 == 0:
+            logger.info(f"Fetched Edge stats: {i + 1}/{len(all_skaters)} players")
+
+    logger.info(f"Collected Edge stats for {len(edge_stats)} players")
+
+    # 7. Collect shots/60 values for percentile calculation
+    all_shots_per_60 = []
+    for player in all_skaters:
+        player_id = player["player_id"]
+        if player_id in trad_stats:
+            shots_per_60 = trad_stats[player_id].get("shots_per_60")
+            if shots_per_60 is not None:
+                all_shots_per_60.append(shots_per_60)
+    all_shots_per_60.sort()
+
+    # 8. Save Edge stats with shots percentile
+    players_updated = 0
+    for player in all_skaters:
+        player_id = player["player_id"]
+
         if player_id in edge_stats:
             edge = edge_stats[player_id]
             trad = trad_stats.get(player_id, {})
 
-            # Calculate Motor Index for this player
-            motor = calculate_motor_index(
-                position=player_info.get("position"),
-                games_played=trad.get("games_played", 0) or 0,
-                avg_toi=trad.get("avg_toi", 0) or 0,
-                bursts_20_plus=edge.get("bursts_20_plus", 0) or 0,
-                distance_per_game=edge.get("distance_per_game_miles", 0) or 0,
-                hits=trad.get("hits", 0) or 0,
-                shots=trad.get("shots", 0) or 0,
-                off_zone_time_pct=edge.get("off_zone_time_pct", 0) or 0,
-                position_avgs=position_avgs
-            )
-
-            if motor is not None:
-                edge["motor_index"] = motor
-                edge["motor_percentile"] = calculate_percentile(motor, all_motor_scores)
-
             # Calculate shots percentile
             shots_per_60 = trad.get("shots_per_60")
             if shots_per_60 is not None and all_shots_per_60:
-                edge["shots_percentile"] = calculate_shots_percentile(shots_per_60, all_shots_per_60)
+                edge["shots_percentile"] = calculate_percentile(shots_per_60, all_shots_per_60)
 
             database.upsert_player_edge_stats(player_id, edge)
             players_updated += 1
 
     # Update timestamp
     database.set_last_updated(datetime.now())
-    logger.info(f"Data refresh complete. Updated {players_updated} players.")
+    logger.info(f"Data refresh complete. Updated {players_updated} players with Edge stats.")
 
     return players_updated
 

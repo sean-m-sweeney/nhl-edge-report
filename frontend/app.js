@@ -1,15 +1,22 @@
 /**
  * Caps Edge - Frontend JavaScript
- * Handles data fetching, table rendering, and sorting
+ * Handles data fetching, table rendering, sorting, and filtering
  */
 
 // State
 let allPlayers = [];
 let forwards = [];
 let defensemen = [];
+let teams = [];
 let sortState = {
     forwards: { field: 'points', direction: 'desc' },
     defensemen: { field: 'points', direction: 'desc' }
+};
+let filterState = {
+    type: 'team',
+    team: 'WSH',
+    division: 'Metropolitan',
+    conference: 'Eastern'
 };
 
 // DOM Elements
@@ -23,6 +30,11 @@ const legendEl = document.getElementById('legend');
 const infoSection = document.getElementById('info-section');
 const infoToggle = document.getElementById('info-toggle');
 const infoContent = document.getElementById('info-content');
+const filterTypeEl = document.getElementById('filter-type');
+const filterTeamEl = document.getElementById('filter-team');
+const filterDivisionEl = document.getElementById('filter-division');
+const filterConferenceEl = document.getElementById('filter-conference');
+const playerCountEl = document.getElementById('player-count');
 
 /**
  * Format relative time (e.g., "2 hours ago")
@@ -90,6 +102,7 @@ function getHockeyRefUrl(playerName) {
 function renderPlayerRow(player) {
     const stats = player.stats || {};
     const edge = player.edge_stats || {};
+    const showTeamCol = filterState.type !== 'team';
 
     // Position display - convert single letter to full for readability
     const positionMap = { 'C': 'C', 'L': 'LW', 'R': 'RW', 'D': 'D' };
@@ -109,12 +122,14 @@ function renderPlayerRow(player) {
                     ${player.name}
                 </a>
             </td>
+            <td class="table-cell team-col ${showTeamCol ? '' : 'hidden'}">${player.team_abbr || '-'}</td>
             <td class="table-cell">${position}</td>
             <td class="table-cell">${formatStat(stats.games_played)}</td>
             <td class="table-cell">${formatStat(stats.avg_toi, 1)}</td>
             <td class="table-cell">${formatStat(stats.goals)}</td>
             <td class="table-cell">${formatStat(stats.assists)}</td>
             <td class="table-cell font-semibold">${formatStat(stats.points)}</td>
+            <td class="table-cell">${formatStatWithPercentile(stats.p60, stats.p60_percentile, 2)}</td>
             <td class="table-cell ${stats.plus_minus > 0 ? 'text-green-400' : stats.plus_minus < 0 ? 'text-red-400' : ''}">${stats.plus_minus > 0 ? '+' : ''}${formatStat(stats.plus_minus)}</td>
             <td class="table-cell">${formatStat(stats.hits)}</td>
             <td class="table-cell">${formatStat(stats.pim)}</td>
@@ -128,7 +143,6 @@ function renderPlayerRow(player) {
             <td class="table-cell">${formatStatWithPercentile(edge.def_zone_time_pct, edge.def_zone_percentile)}</td>
             <td class="table-cell">${formatStatWithPercentile(edge.zone_starts_off_pct, edge.zone_starts_percentile)}</td>
             <td class="table-cell">${formatStatWithPercentile(edge.top_shot_speed_mph, edge.shot_speed_percentile)}</td>
-            <td class="table-cell">${formatStatWithPercentile(edge.motor_index, edge.motor_percentile)}</td>
         </tr>
     `;
 }
@@ -156,12 +170,14 @@ function sortPlayersArray(playersArray, field, direction) {
     const fieldMap = {
         'jersey_number': 'jersey_number',
         'name': 'name',
+        'team_abbr': 'team_abbr',
         'position': 'position',
         'games_played': 'stats.games_played',
         'avg_toi': 'stats.avg_toi',
         'goals': 'stats.goals',
         'assists': 'stats.assists',
         'points': 'stats.points',
+        'p60': 'stats.p60',
         'plus_minus': 'stats.plus_minus',
         'hits': 'stats.hits',
         'pim': 'stats.pim',
@@ -174,8 +190,7 @@ function sortPlayersArray(playersArray, field, direction) {
         'off_zone_time_pct': 'edge_stats.off_zone_time_pct',
         'def_zone_time_pct': 'edge_stats.def_zone_time_pct',
         'zone_starts_off_pct': 'edge_stats.zone_starts_off_pct',
-        'top_shot_speed_mph': 'edge_stats.top_shot_speed_mph',
-        'motor_index': 'edge_stats.motor_index'
+        'top_shot_speed_mph': 'edge_stats.top_shot_speed_mph'
     };
 
     const path = fieldMap[field] || field;
@@ -287,11 +302,52 @@ function setupInfoToggle() {
 }
 
 /**
+ * Build API URL with current filters
+ */
+function buildPlayersUrl() {
+    let url = '/api/players';
+    const params = new URLSearchParams();
+
+    switch (filterState.type) {
+        case 'team':
+            params.set('team', filterState.team);
+            break;
+        case 'division':
+            params.set('division', filterState.division);
+            break;
+        case 'conference':
+            params.set('conference', filterState.conference);
+            break;
+        case 'league':
+            // No filter - get all players
+            break;
+    }
+
+    const queryString = params.toString();
+    return queryString ? `${url}?${queryString}` : url;
+}
+
+/**
+ * Show/hide team column based on filter type
+ */
+function updateTeamColumnVisibility() {
+    const showTeam = filterState.type !== 'team';
+    document.querySelectorAll('.team-col').forEach(el => {
+        if (showTeam) {
+            el.classList.remove('hidden');
+        } else {
+            el.classList.add('hidden');
+        }
+    });
+}
+
+/**
  * Fetch players data from API
  */
 async function fetchPlayers() {
     try {
-        const response = await fetch('/api/players');
+        const url = buildPlayersUrl();
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error('Failed to fetch players');
         }
@@ -306,9 +362,15 @@ async function fetchPlayers() {
         // Update last updated time
         lastUpdatedEl.textContent = formatRelativeTime(data.last_updated);
 
+        // Update player count
+        playerCountEl.textContent = `${data.count} players`;
+
         // Sort by points by default
         sortPlayersArray(forwards, 'points', 'desc');
         sortPlayersArray(defensemen, 'points', 'desc');
+
+        // Update team column visibility
+        updateTeamColumnVisibility();
 
         // Render both tables
         renderForwards();
@@ -332,12 +394,116 @@ async function fetchPlayers() {
 }
 
 /**
+ * Fetch teams list and populate dropdown
+ */
+async function fetchTeams() {
+    try {
+        const response = await fetch('/api/teams');
+        if (!response.ok) {
+            throw new Error('Failed to fetch teams');
+        }
+
+        const data = await response.json();
+        teams = data.teams;
+
+        // Group teams by division for better UX
+        const teamsByDivision = {};
+        teams.forEach(team => {
+            if (!teamsByDivision[team.division]) {
+                teamsByDivision[team.division] = [];
+            }
+            teamsByDivision[team.division].push(team);
+        });
+
+        // Build dropdown with optgroups
+        filterTeamEl.innerHTML = '';
+        const divisions = ['Metropolitan', 'Atlantic', 'Central', 'Pacific'];
+        divisions.forEach(division => {
+            const group = document.createElement('optgroup');
+            group.label = division;
+            (teamsByDivision[division] || []).forEach(team => {
+                const option = document.createElement('option');
+                option.value = team.abbr;
+                option.textContent = team.name;
+                if (team.abbr === filterState.team) {
+                    option.selected = true;
+                }
+                group.appendChild(option);
+            });
+            filterTeamEl.appendChild(group);
+        });
+
+    } catch (error) {
+        console.error('Error fetching teams:', error);
+    }
+}
+
+/**
+ * Update filter dropdown visibility based on filter type
+ */
+function updateFilterDropdowns() {
+    filterTeamEl.classList.add('hidden');
+    filterDivisionEl.classList.add('hidden');
+    filterConferenceEl.classList.add('hidden');
+
+    switch (filterState.type) {
+        case 'team':
+            filterTeamEl.classList.remove('hidden');
+            break;
+        case 'division':
+            filterDivisionEl.classList.remove('hidden');
+            break;
+        case 'conference':
+            filterConferenceEl.classList.remove('hidden');
+            break;
+        case 'league':
+            // No dropdown needed
+            break;
+    }
+}
+
+/**
+ * Setup filter event handlers
+ */
+function setupFilterHandlers() {
+    // Filter type change
+    filterTypeEl.addEventListener('change', () => {
+        filterState.type = filterTypeEl.value;
+        updateFilterDropdowns();
+        fetchPlayers();
+    });
+
+    // Team filter change
+    filterTeamEl.addEventListener('change', () => {
+        filterState.team = filterTeamEl.value;
+        fetchPlayers();
+    });
+
+    // Division filter change
+    filterDivisionEl.addEventListener('change', () => {
+        filterState.division = filterDivisionEl.value;
+        fetchPlayers();
+    });
+
+    // Conference filter change
+    filterConferenceEl.addEventListener('change', () => {
+        filterState.conference = filterConferenceEl.value;
+        fetchPlayers();
+    });
+}
+
+/**
  * Initialize the app
  */
-function init() {
+async function init() {
     setupSortHandlers();
     setupInfoToggle();
-    fetchPlayers();
+    setupFilterHandlers();
+    updateFilterDropdowns();
+
+    // Fetch teams first, then players
+    await fetchTeams();
+    await fetchPlayers();
 
     // Refresh data periodically (every 5 minutes)
     setInterval(fetchPlayers, 5 * 60 * 1000);

@@ -1,7 +1,8 @@
-"""FastAPI application for Caps Edge."""
+"""FastAPI application for Chel Edge."""
 
 import os
-from fastapi import FastAPI, HTTPException, Header, BackgroundTasks
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
@@ -9,7 +10,8 @@ from pathlib import Path
 from backend import database
 from backend.models import (
     Player, PlayerStats, PlayerEdgeStats,
-    PlayerResponse, PlayersResponse, HealthResponse, RefreshResponse
+    PlayerResponse, PlayersResponse, HealthResponse, RefreshResponse,
+    TeamsResponse, DivisionsResponse
 )
 from backend.fetcher import refresh_data
 
@@ -17,9 +19,9 @@ from backend.fetcher import refresh_data
 API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "dev-key-change-me")
 
 app = FastAPI(
-    title="Caps Edge API",
-    description="NHL Edge Stats for Washington Capitals",
-    version="1.0.0"
+    title="Chel Edge API",
+    description="NHL Edge stats in a comprehensive, sortable format",
+    version="2.0.0"
 )
 
 # Static files path
@@ -41,7 +43,9 @@ def db_row_to_player(row: dict) -> Player:
             pim=row.get("pim"),
             faceoff_win_pct=round(row["faceoff_win_pct"] * 100, 1) if row.get("faceoff_win_pct") else None,
             shots=row.get("shots"),
-            shots_per_60=round(row["shots_per_60"], 1) if row.get("shots_per_60") else None
+            shots_per_60=round(row["shots_per_60"], 1) if row.get("shots_per_60") else None,
+            p60=round(row["p60"], 2) if row.get("p60") else None,
+            p60_percentile=row.get("p60_percentile")
         )
 
     edge_stats = None
@@ -64,9 +68,7 @@ def db_row_to_player(row: dict) -> Player:
             zone_starts_percentile=row.get("zone_starts_percentile"),
             top_shot_speed_mph=round(row["top_shot_speed_mph"], 1) if row.get("top_shot_speed_mph") else None,
             shot_speed_percentile=row.get("shot_speed_percentile"),
-            shots_percentile=row.get("shots_percentile"),
-            motor_index=round(row["motor_index"], 1) if row.get("motor_index") else None,
-            motor_percentile=row.get("motor_percentile")
+            shots_percentile=row.get("shots_percentile")
         )
 
     return Player(
@@ -74,15 +76,36 @@ def db_row_to_player(row: dict) -> Player:
         name=row["name"],
         position=row["position"],
         jersey_number=row.get("jersey_number"),
+        team_abbr=row.get("team_abbr"),
+        team_name=row.get("team_name"),
+        division=row.get("division"),
+        conference=row.get("conference"),
         stats=stats,
         edge_stats=edge_stats
     )
 
 
 @app.get("/api/players", response_model=PlayersResponse)
-async def get_players():
-    """Get all Caps skaters with full stats and edge stats."""
-    rows = database.get_all_players_with_stats()
+async def get_players(
+    team: Optional[str] = Query(None, description="Team abbreviation (e.g., WSH, PIT)"),
+    division: Optional[str] = Query(None, description="Division name (Metropolitan, Atlantic, Central, Pacific)"),
+    conference: Optional[str] = Query(None, description="Conference name (Eastern, Western)")
+):
+    """
+    Get all skaters with full stats and edge stats.
+
+    Optional filters:
+    - team: Filter by team abbreviation (e.g., WSH for Capitals)
+    - division: Filter by division (Metropolitan, Atlantic, Central, Pacific)
+    - conference: Filter by conference (Eastern, Western)
+
+    If no filters provided, returns all league players.
+    """
+    rows = database.get_players_with_stats(
+        team_abbr=team,
+        division=division,
+        conference=conference
+    )
     players = [db_row_to_player(row) for row in rows]
     last_updated = database.get_last_updated()
 
@@ -109,10 +132,24 @@ async def get_player(player_id: int):
     )
 
 
+@app.get("/api/teams", response_model=TeamsResponse)
+async def get_teams():
+    """Get list of all NHL teams with their divisions and conferences."""
+    teams = database.get_teams_list()
+    return TeamsResponse(teams=teams)
+
+
+@app.get("/api/divisions", response_model=DivisionsResponse)
+async def get_divisions():
+    """Get list of all divisions grouped by conference."""
+    divisions = database.get_divisions_list()
+    return DivisionsResponse(divisions=divisions)
+
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    rows = database.get_all_players_with_stats()
+    rows = database.get_players_with_stats()
     last_updated = database.get_last_updated()
 
     return HealthResponse(

@@ -18,6 +18,8 @@ class PlayerStats(BaseModel):
     faceoff_win_pct: Optional[float] = None
     shots: Optional[int] = None
     shots_per_60: Optional[float] = None
+    p60: Optional[float] = None  # Points per 60 minutes
+    p60_percentile: Optional[int] = None
 
 
 class PlayerEdgeStats(BaseModel):
@@ -54,10 +56,6 @@ class PlayerEdgeStats(BaseModel):
     # Shots percentile (for shots/60)
     shots_percentile: Optional[int] = None
 
-    # Motor Index (measures effort relative to position)
-    motor_index: Optional[float] = None
-    motor_percentile: Optional[int] = None
-
 
 class Player(BaseModel):
     """Complete player data including all stats."""
@@ -65,6 +63,10 @@ class Player(BaseModel):
     name: str
     position: str
     jersey_number: Optional[int] = None
+    team_abbr: Optional[str] = None
+    team_name: Optional[str] = None
+    division: Optional[str] = None
+    conference: Optional[str] = None
     stats: Optional[PlayerStats] = None
     edge_stats: Optional[PlayerEdgeStats] = None
 
@@ -94,3 +96,28 @@ class RefreshResponse(BaseModel):
     status: str
     message: str
     players_updated: int
+
+
+class Team(BaseModel):
+    """NHL team information."""
+    abbr: str
+    name: str
+    division: str
+    conference: str
+
+
+class TeamsResponse(BaseModel):
+    """API response for teams list."""
+    teams: list[Team]
+
+
+class Division(BaseModel):
+    """Division information with teams."""
+    name: str
+    conference: str
+    teams: list[str]  # Team abbreviations
+
+
+class DivisionsResponse(BaseModel):
+    """API response for divisions list."""
+    divisions: list[Division]

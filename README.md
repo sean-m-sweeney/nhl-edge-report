@@ -1,15 +1,16 @@
 # Caps Edge
 
-NHL Edge Stats for Washington Capitals - Advanced skating and effort metrics with league percentile context.
+NHL Edge Stats for all NHL Teams - Advanced skating and effort metrics with league percentile context.
 
 ![Screenshot placeholder](screenshot.png)
 
 ## Overview
 
-Caps Edge displays NHL Edge tracking statistics for Washington Capitals players. Includes skating speed, burst counts, zone time, shot velocity, and a custom Hustle Score. Every stat includes a league-wide percentile for comparison.
+Caps Edge displays NHL Edge tracking statistics for all NHL players. Includes skating speed, burst counts, zone time, shot velocity, and a custom Motor Index. Every stat includes a league-wide percentile for comparison. View by team, division, conference, or entire league.
 
 ## Features
 
+- **League-Wide Coverage**: View stats for any NHL team, division, conference, or entire league
 - **Traditional Stats**: GP, TOI, G, A, P, +/-, Hits, PIM, Shots/60, FO%
 - **Edge Stats with Percentiles**:
   - Top skating speed (mph)
@@ -22,7 +23,7 @@ Caps Edge displays NHL Edge tracking statistics for Washington Capitals players.
 - **Interactive Table**: Click any column to sort
 - **Percentile Coloring**: Green for 75th+ percentile, red for below 25th
 - **Player Links**: Click any player name to view their Hockey-Reference page
-- **Auto-refresh**: Data updates 3x daily (1 PM, 7 PM, 11 PM ET)
+- **Auto-refresh**: Data updates daily at 6 AM ET
 
 ## Quick Start
 
@@ -78,10 +79,24 @@ The first startup will automatically fetch initial data, which may take a few mi
 ## API Endpoints
 
 ### `GET /api/players`
-Returns all Caps skaters with full stats and edge stats.
+Returns skaters with full stats and edge stats. Supports filtering:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `team` | Team abbreviation | `?team=WSH` |
+| `division` | Division name | `?division=Metropolitan` |
+| `conference` | Conference name | `?conference=Eastern` |
+
+If no filters provided, returns all league players.
 
 ### `GET /api/players/{player_id}`
 Returns a single player with all stats.
+
+### `GET /api/teams`
+Returns list of all NHL teams with divisions and conferences.
+
+### `GET /api/divisions`
+Returns list of divisions grouped by conference.
 
 ### `GET /api/health`
 Returns service status and last update timestamp.
@@ -98,10 +113,10 @@ Triggers a synchronous data refresh (waits for completion). Requires `X-API-Key`
 
 ## Data Refresh Schedule
 
-Data is automatically refreshed 3 times daily via cron:
-- **1:00 PM ET**
-- **7:00 PM ET**
-- **11:00 PM ET**
+Data is automatically refreshed once daily via cron:
+- **6:00 AM ET**
+
+The refresh fetches Edge stats for all ~850 qualified NHL skaters (10+ games played), so it takes approximately 15-20 minutes to complete.
 
 You can also trigger a manual refresh using the API endpoint.
 
@@ -180,7 +195,7 @@ caps-edge/
 
 - [ ] League-wide leaderboard view for any stat
 - [ ] Player comparison tool (side-by-side)
-- [ ] Support for other NHL teams (team selector)
+- [x] ~~Support for other NHL teams (team selector)~~ (v2.0)
 - [ ] Historical season selector
 - [ ] Game-by-game breakdown for individual players
 - [ ] Playoff vs regular season toggle

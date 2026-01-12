@@ -10,6 +10,51 @@ import os
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent.parent / "data"))
 DB_PATH = DATA_DIR / "caps_edge.db"
 
+# NHL Team/Division/Conference mappings
+NHL_TEAMS = {
+    # Metropolitan Division (Eastern)
+    "CAR": {"name": "Carolina Hurricanes", "division": "Metropolitan", "conference": "Eastern"},
+    "CBJ": {"name": "Columbus Blue Jackets", "division": "Metropolitan", "conference": "Eastern"},
+    "NJD": {"name": "New Jersey Devils", "division": "Metropolitan", "conference": "Eastern"},
+    "NYI": {"name": "New York Islanders", "division": "Metropolitan", "conference": "Eastern"},
+    "NYR": {"name": "New York Rangers", "division": "Metropolitan", "conference": "Eastern"},
+    "PHI": {"name": "Philadelphia Flyers", "division": "Metropolitan", "conference": "Eastern"},
+    "PIT": {"name": "Pittsburgh Penguins", "division": "Metropolitan", "conference": "Eastern"},
+    "WSH": {"name": "Washington Capitals", "division": "Metropolitan", "conference": "Eastern"},
+    # Atlantic Division (Eastern)
+    "BOS": {"name": "Boston Bruins", "division": "Atlantic", "conference": "Eastern"},
+    "BUF": {"name": "Buffalo Sabres", "division": "Atlantic", "conference": "Eastern"},
+    "DET": {"name": "Detroit Red Wings", "division": "Atlantic", "conference": "Eastern"},
+    "FLA": {"name": "Florida Panthers", "division": "Atlantic", "conference": "Eastern"},
+    "MTL": {"name": "Montreal Canadiens", "division": "Atlantic", "conference": "Eastern"},
+    "OTT": {"name": "Ottawa Senators", "division": "Atlantic", "conference": "Eastern"},
+    "TBL": {"name": "Tampa Bay Lightning", "division": "Atlantic", "conference": "Eastern"},
+    "TOR": {"name": "Toronto Maple Leafs", "division": "Atlantic", "conference": "Eastern"},
+    # Central Division (Western)
+    "UTA": {"name": "Utah Hockey Club", "division": "Central", "conference": "Western"},
+    "CHI": {"name": "Chicago Blackhawks", "division": "Central", "conference": "Western"},
+    "COL": {"name": "Colorado Avalanche", "division": "Central", "conference": "Western"},
+    "DAL": {"name": "Dallas Stars", "division": "Central", "conference": "Western"},
+    "MIN": {"name": "Minnesota Wild", "division": "Central", "conference": "Western"},
+    "NSH": {"name": "Nashville Predators", "division": "Central", "conference": "Western"},
+    "STL": {"name": "St. Louis Blues", "division": "Central", "conference": "Western"},
+    "WPG": {"name": "Winnipeg Jets", "division": "Central", "conference": "Western"},
+    # Pacific Division (Western)
+    "ANA": {"name": "Anaheim Ducks", "division": "Pacific", "conference": "Western"},
+    "CGY": {"name": "Calgary Flames", "division": "Pacific", "conference": "Western"},
+    "EDM": {"name": "Edmonton Oilers", "division": "Pacific", "conference": "Western"},
+    "LAK": {"name": "Los Angeles Kings", "division": "Pacific", "conference": "Western"},
+    "SEA": {"name": "Seattle Kraken", "division": "Pacific", "conference": "Western"},
+    "SJS": {"name": "San Jose Sharks", "division": "Pacific", "conference": "Western"},
+    "VAN": {"name": "Vancouver Canucks", "division": "Pacific", "conference": "Western"},
+    "VGK": {"name": "Vegas Golden Knights", "division": "Pacific", "conference": "Western"},
+}
+
+
+def get_team_info(team_abbr: str) -> dict:
+    """Get team info (division, conference) from abbreviation."""
+    return NHL_TEAMS.get(team_abbr, {"name": team_abbr, "division": "Unknown", "conference": "Unknown"})
+
 
 def get_connection() -> sqlite3.Connection:
     """Get a database connection with row factory."""
@@ -24,13 +69,17 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Players table
+    # Players table with team info
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS players (
             player_id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             position TEXT NOT NULL,
-            jersey_number INTEGER
+            jersey_number INTEGER,
+            team_abbr TEXT,
+            team_name TEXT,
+            division TEXT,
+            conference TEXT
         )
     """)
 
@@ -51,6 +100,10 @@ def init_db():
             faceoff_win_pct REAL,
             shots INTEGER,
             shots_per_60 REAL,
+            p60 REAL,
+            p60_percentile INTEGER,
+            toi_per_game REAL,
+            toi_per_game_percentile INTEGER,
             FOREIGN KEY (player_id) REFERENCES players(player_id)
         )
     """)
@@ -94,10 +147,6 @@ def init_db():
             -- Shots percentile (for shots/60)
             shots_percentile INTEGER,
 
-            -- Motor Index (replaces Hustle Score)
-            motor_index REAL,
-            motor_percentile INTEGER,
-
             FOREIGN KEY (player_id) REFERENCES players(player_id)
         )
     """)
@@ -110,37 +159,6 @@ def init_db():
         )
     """)
 
-    # Position averages table (rebuilt on each refresh)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS position_averages (
-            position TEXT PRIMARY KEY,
-            avg_bursts_per_60 REAL,
-            avg_distance_per_game REAL,
-            avg_hits_per_60 REAL,
-            avg_shots_per_60 REAL,
-            avg_off_zone_pct REAL,
-            sample_size INTEGER
-        )
-    """)
-
-    # League stats for Motor Index percentile calculations
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS league_stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            updated_at DATETIME NOT NULL,
-            player_id INTEGER NOT NULL,
-            position TEXT,
-            games_played INTEGER,
-            avg_toi REAL,
-            hits INTEGER,
-            shots INTEGER,
-            bursts_20_plus INTEGER,
-            distance_per_game_miles REAL,
-            off_zone_time_pct REAL,
-            motor_index REAL
-        )
-    """)
-
     # Run migrations for existing databases
     _run_migrations(cursor)
 
@@ -150,7 +168,20 @@ def init_db():
 
 def _run_migrations(cursor):
     """Run database migrations for schema changes."""
-    # Check if we need to add new columns to player_stats
+    # Check players table for team columns
+    cursor.execute("PRAGMA table_info(players)")
+    player_columns = [col[1] for col in cursor.fetchall()]
+
+    if "team_abbr" not in player_columns:
+        cursor.execute("ALTER TABLE players ADD COLUMN team_abbr TEXT")
+    if "team_name" not in player_columns:
+        cursor.execute("ALTER TABLE players ADD COLUMN team_name TEXT")
+    if "division" not in player_columns:
+        cursor.execute("ALTER TABLE players ADD COLUMN division TEXT")
+    if "conference" not in player_columns:
+        cursor.execute("ALTER TABLE players ADD COLUMN conference TEXT")
+
+    # Check player_stats for new columns
     cursor.execute("PRAGMA table_info(player_stats)")
     columns = [col[1] for col in cursor.fetchall()]
 
@@ -158,28 +189,25 @@ def _run_migrations(cursor):
         cursor.execute("ALTER TABLE player_stats ADD COLUMN shots INTEGER")
     if "shots_per_60" not in columns:
         cursor.execute("ALTER TABLE player_stats ADD COLUMN shots_per_60 REAL")
+    if "p60" not in columns:
+        cursor.execute("ALTER TABLE player_stats ADD COLUMN p60 REAL")
+    if "p60_percentile" not in columns:
+        cursor.execute("ALTER TABLE player_stats ADD COLUMN p60_percentile INTEGER")
+    if "toi_per_game" not in columns:
+        cursor.execute("ALTER TABLE player_stats ADD COLUMN toi_per_game REAL")
+    if "toi_per_game_percentile" not in columns:
+        cursor.execute("ALTER TABLE player_stats ADD COLUMN toi_per_game_percentile INTEGER")
 
-    # Check player_edge_stats for motor columns
+    # Check player_edge_stats columns
     cursor.execute("PRAGMA table_info(player_edge_stats)")
     edge_columns = [col[1] for col in cursor.fetchall()]
 
-    if "motor_index" not in edge_columns:
-        cursor.execute("ALTER TABLE player_edge_stats ADD COLUMN motor_index REAL")
-    if "motor_percentile" not in edge_columns:
-        cursor.execute("ALTER TABLE player_edge_stats ADD COLUMN motor_percentile INTEGER")
     if "shots_percentile" not in edge_columns:
         cursor.execute("ALTER TABLE player_edge_stats ADD COLUMN shots_percentile INTEGER")
 
-    # Check league_stats for position and shots
-    cursor.execute("PRAGMA table_info(league_stats)")
-    league_columns = [col[1] for col in cursor.fetchall()]
-
-    if "position" not in league_columns:
-        cursor.execute("ALTER TABLE league_stats ADD COLUMN position TEXT")
-    if "shots" not in league_columns:
-        cursor.execute("ALTER TABLE league_stats ADD COLUMN shots INTEGER")
-    if "motor_index" not in league_columns:
-        cursor.execute("ALTER TABLE league_stats ADD COLUMN motor_index REAL")
+    # Drop old tables if they exist (no longer needed)
+    cursor.execute("DROP TABLE IF EXISTS position_averages")
+    cursor.execute("DROP TABLE IF EXISTS league_stats")
 
 
 def get_last_updated() -> Optional[datetime]:
@@ -205,14 +233,29 @@ def set_last_updated(timestamp: datetime):
     conn.close()
 
 
-def upsert_player(player_id: int, name: str, position: str, jersey_number: Optional[int]):
+def upsert_player(player_id: int, name: str, position: str, jersey_number: Optional[int],
+                  team_abbr: Optional[str] = None):
     """Insert or update a player."""
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Get team info
+    team_info = get_team_info(team_abbr) if team_abbr else {}
+
     cursor.execute("""
-        INSERT OR REPLACE INTO players (player_id, name, position, jersey_number)
-        VALUES (?, ?, ?, ?)
-    """, (player_id, name, position, jersey_number))
+        INSERT OR REPLACE INTO players (player_id, name, position, jersey_number,
+                                        team_abbr, team_name, division, conference)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        player_id,
+        name,
+        position,
+        jersey_number,
+        team_abbr,
+        team_info.get("name"),
+        team_info.get("division"),
+        team_info.get("conference")
+    ))
     conn.commit()
     conn.close()
 
@@ -229,8 +272,9 @@ def upsert_player_stats(player_id: int, stats: dict):
     cursor.execute("""
         INSERT INTO player_stats (
             player_id, updated_at, games_played, avg_toi, goals, assists,
-            points, plus_minus, hits, pim, faceoff_win_pct, shots, shots_per_60
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            points, plus_minus, hits, pim, faceoff_win_pct, shots, shots_per_60,
+            p60, p60_percentile, toi_per_game, toi_per_game_percentile
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         player_id,
         datetime.now().isoformat(),
@@ -244,7 +288,11 @@ def upsert_player_stats(player_id: int, stats: dict):
         stats.get("pim"),
         stats.get("faceoff_win_pct"),
         stats.get("shots"),
-        stats.get("shots_per_60")
+        stats.get("shots_per_60"),
+        stats.get("p60"),
+        stats.get("p60_percentile"),
+        stats.get("toi_per_game"),
+        stats.get("toi_per_game_percentile")
     ))
     conn.commit()
     conn.close()
@@ -271,9 +319,8 @@ def upsert_player_edge_stats(player_id: int, stats: dict):
             neu_zone_time_pct,
             zone_starts_off_pct, zone_starts_percentile,
             top_shot_speed_mph, shot_speed_percentile,
-            shots_percentile,
-            motor_index, motor_percentile
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            shots_percentile
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         player_id,
         datetime.now().isoformat(),
@@ -294,114 +341,132 @@ def upsert_player_edge_stats(player_id: int, stats: dict):
         stats.get("zone_starts_percentile"),
         stats.get("top_shot_speed_mph"),
         stats.get("shot_speed_percentile"),
-        stats.get("shots_percentile"),
-        stats.get("motor_index"),
-        stats.get("motor_percentile")
+        stats.get("shots_percentile")
     ))
     conn.commit()
     conn.close()
 
 
-def clear_league_stats():
-    """Clear league stats table for fresh calculation."""
+def clear_all_player_data():
+    """Clear all player data for fresh full refresh."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM league_stats")
+    cursor.execute("DELETE FROM player_edge_stats")
+    cursor.execute("DELETE FROM player_stats")
+    cursor.execute("DELETE FROM players")
     conn.commit()
     conn.close()
 
 
-def clear_position_averages():
-    """Clear position averages table for fresh calculation."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM position_averages")
-    conn.commit()
-    conn.close()
-
-
-def insert_position_averages(position: str, avgs: dict):
-    """Insert position averages."""
+def get_league_shots_per_60() -> list:
+    """Get all shots per 60 for percentile calculation."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO position_averages (
-            position, avg_bursts_per_60, avg_distance_per_game,
-            avg_hits_per_60, avg_shots_per_60, avg_off_zone_pct, sample_size
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        position,
-        avgs.get("avg_bursts_per_60"),
-        avgs.get("avg_distance_per_game"),
-        avgs.get("avg_hits_per_60"),
-        avgs.get("avg_shots_per_60"),
-        avgs.get("avg_off_zone_pct"),
-        avgs.get("sample_size")
-    ))
-    conn.commit()
-    conn.close()
-
-
-def get_position_averages() -> dict:
-    """Get position averages as a dict keyed by position."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM position_averages")
-    rows = cursor.fetchall()
-    conn.close()
-    return {row["position"]: dict(row) for row in rows}
-
-
-def insert_league_stats(player_id: int, stats: dict):
-    """Insert league-wide player stats for percentile calculation."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO league_stats (
-            updated_at, player_id, position, games_played, avg_toi, hits, shots,
-            bursts_20_plus, distance_per_game_miles, off_zone_time_pct, motor_index
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        datetime.now().isoformat(),
-        player_id,
-        stats.get("position"),
-        stats.get("games_played"),
-        stats.get("avg_toi"),
-        stats.get("hits"),
-        stats.get("shots"),
-        stats.get("bursts_20_plus"),
-        stats.get("distance_per_game_miles"),
-        stats.get("off_zone_time_pct"),
-        stats.get("motor_index")
-    ))
-    conn.commit()
-    conn.close()
-
-
-def get_league_motor_scores() -> list:
-    """Get all motor index scores from league stats for percentile calculation."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT motor_index FROM league_stats
-        WHERE games_played >= 10 AND motor_index IS NOT NULL
-        ORDER BY motor_index
+        SELECT shots_per_60 FROM player_stats
+        WHERE games_played >= 10 AND shots_per_60 IS NOT NULL
+        ORDER BY shots_per_60
     """)
     rows = cursor.fetchall()
     conn.close()
-    return [row["motor_index"] for row in rows]
+    return [row["shots_per_60"] for row in rows]
 
 
-def get_all_players_with_stats() -> list:
-    """Get all players with their stats and edge stats."""
+def get_league_p60() -> list:
+    """Get all P/60 values for percentile calculation."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
+        SELECT p60 FROM player_stats
+        WHERE games_played >= 10 AND p60 IS NOT NULL
+        ORDER BY p60
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [row["p60"] for row in rows]
+
+
+def get_league_toi_by_position() -> dict:
+    """Get TOI/G values by position (F vs D) for percentile calculation."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get forwards TOI
+    cursor.execute("""
+        SELECT s.toi_per_game FROM player_stats s
+        JOIN players p ON s.player_id = p.player_id
+        WHERE s.games_played >= 10 AND s.toi_per_game IS NOT NULL
+        AND p.position IN ('C', 'L', 'R')
+        ORDER BY s.toi_per_game
+    """)
+    forwards = [row["toi_per_game"] for row in cursor.fetchall()]
+
+    # Get defensemen TOI
+    cursor.execute("""
+        SELECT s.toi_per_game FROM player_stats s
+        JOIN players p ON s.player_id = p.player_id
+        WHERE s.games_played >= 10 AND s.toi_per_game IS NOT NULL
+        AND p.position = 'D'
+        ORDER BY s.toi_per_game
+    """)
+    defensemen = [row["toi_per_game"] for row in cursor.fetchall()]
+
+    conn.close()
+    return {"F": forwards, "D": defensemen}
+
+
+def get_teams_list() -> list:
+    """Get list of all teams in model format."""
+    teams = []
+    for abbr, info in NHL_TEAMS.items():
+        teams.append({
+            "abbr": abbr,
+            "name": info["name"],
+            "division": info["division"],
+            "conference": info["conference"]
+        })
+    # Sort by conference, division, name
+    teams.sort(key=lambda t: (t["conference"], t["division"], t["name"]))
+    return teams
+
+
+def get_divisions_list() -> list:
+    """Get list of divisions with teams in model format."""
+    divisions = {
+        "Metropolitan": {"name": "Metropolitan", "conference": "Eastern", "teams": []},
+        "Atlantic": {"name": "Atlantic", "conference": "Eastern", "teams": []},
+        "Central": {"name": "Central", "conference": "Western", "teams": []},
+        "Pacific": {"name": "Pacific", "conference": "Western", "teams": []},
+    }
+
+    for abbr, info in NHL_TEAMS.items():
+        div = info["division"]
+        if div in divisions:
+            divisions[div]["teams"].append(abbr)
+
+    # Sort teams within each division
+    for div in divisions.values():
+        div["teams"].sort()
+
+    return list(divisions.values())
+
+
+def get_players_with_stats(team_abbr: Optional[str] = None,
+                            division: Optional[str] = None,
+                            conference: Optional[str] = None) -> list:
+    """Get players with stats, optionally filtered by team/division/conference."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    query = """
         SELECT
             p.player_id, p.name, p.position, p.jersey_number,
+            p.team_abbr, p.team_name, p.division, p.conference,
             s.games_played, s.avg_toi, s.goals, s.assists, s.points,
             s.plus_minus, s.hits, s.pim, s.faceoff_win_pct,
             s.shots, s.shots_per_60,
+            s.p60, s.p60_percentile,
+            s.toi_per_game, s.toi_per_game_percentile,
             e.top_speed_mph, e.top_speed_percentile,
             e.bursts_20_plus, e.bursts_20_percentile,
             e.bursts_22_plus, e.bursts_22_percentile,
@@ -411,17 +476,36 @@ def get_all_players_with_stats() -> list:
             e.neu_zone_time_pct,
             e.zone_starts_off_pct, e.zone_starts_percentile,
             e.top_shot_speed_mph, e.shot_speed_percentile,
-            e.shots_percentile,
-            e.motor_index, e.motor_percentile
+            e.shots_percentile
         FROM players p
         LEFT JOIN player_stats s ON p.player_id = s.player_id
         LEFT JOIN player_edge_stats e ON p.player_id = e.player_id
         WHERE p.position != 'G'
-        ORDER BY s.points DESC NULLS LAST
-    """)
+    """
+
+    params = []
+
+    if team_abbr:
+        query += " AND p.team_abbr = ?"
+        params.append(team_abbr)
+    elif division:
+        query += " AND p.division = ?"
+        params.append(division)
+    elif conference:
+        query += " AND p.conference = ?"
+        params.append(conference)
+
+    query += " ORDER BY s.points DESC NULLS LAST"
+
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def get_all_players_with_stats() -> list:
+    """Get all players with their stats and edge stats (legacy compatibility)."""
+    return get_players_with_stats()
 
 
 def get_player_by_id(player_id: int) -> Optional[dict]:
@@ -431,9 +515,12 @@ def get_player_by_id(player_id: int) -> Optional[dict]:
     cursor.execute("""
         SELECT
             p.player_id, p.name, p.position, p.jersey_number,
+            p.team_abbr, p.team_name, p.division, p.conference,
             s.games_played, s.avg_toi, s.goals, s.assists, s.points,
             s.plus_minus, s.hits, s.pim, s.faceoff_win_pct,
             s.shots, s.shots_per_60,
+            s.p60, s.p60_percentile,
+            s.toi_per_game, s.toi_per_game_percentile,
             e.top_speed_mph, e.top_speed_percentile,
             e.bursts_20_plus, e.bursts_20_percentile,
             e.bursts_22_plus, e.bursts_22_percentile,
@@ -443,8 +530,7 @@ def get_player_by_id(player_id: int) -> Optional[dict]:
             e.neu_zone_time_pct,
             e.zone_starts_off_pct, e.zone_starts_percentile,
             e.top_shot_speed_mph, e.shot_speed_percentile,
-            e.shots_percentile,
-            e.motor_index, e.motor_percentile
+            e.shots_percentile
         FROM players p
         LEFT JOIN player_stats s ON p.player_id = s.player_id
         LEFT JOIN player_edge_stats e ON p.player_id = e.player_id
