@@ -34,7 +34,12 @@ The first startup takes 2-3 minutes to fetch initial data from the NHL API.
 
 ### Option 1: Docker Compose (Recommended)
 
-1. **Install Docker Compose Manager** from Community Applications if not already installed
+1. **Install Docker Compose Manager**:
+   - Open UNRAID web UI
+   - Go to **Apps** (Community Applications must be installed)
+   - Search for "Docker Compose Manager"
+   - Click Install and use default settings
+   - After installation, "Compose" appears under the Docker tab
 
 2. **Create the stack**:
    - Go to Docker > Compose
@@ -137,9 +142,9 @@ services:
 ## Data Refresh Schedule
 
 Data automatically refreshes via cron at:
-- **1:00 PM ET** - Pre-game updates
-- **7:00 PM ET** - Mid-evening updates
-- **11:00 PM ET** - Post-game updates
+- **1:00 PM ET**
+- **7:00 PM ET**
+- **11:00 PM ET**
 
 ### Manual Refresh
 

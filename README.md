@@ -6,9 +6,7 @@ NHL Edge Stats for Washington Capitals - Advanced skating and effort metrics wit
 
 ## Overview
 
-Caps Edge displays NHL Edge tracking statistics for Washington Capitals players, giving fans access to advanced metrics like skating speed, burst counts, zone time, and shot velocity. Every stat includes a league-wide percentile so you can see how each player compares to the rest of the NHL.
-
-Built for sharing on Caps fan communities like Reddit r/caps, Russian Machine Never Breaks, and Japers Rink.
+Caps Edge displays NHL Edge tracking statistics for Washington Capitals players. Includes skating speed, burst counts, zone time, shot velocity, and a custom Hustle Score. Every stat includes a league-wide percentile for comparison.
 
 ## Features
 
@@ -101,9 +99,9 @@ Triggers a synchronous data refresh (waits for completion). Requires `X-API-Key`
 ## Data Refresh Schedule
 
 Data is automatically refreshed 3 times daily via cron:
-- **1:00 PM ET** - After morning skates, before afternoon games
-- **7:00 PM ET** - After early games, before late games
-- **11:00 PM ET** - After most games complete
+- **1:00 PM ET**
+- **7:00 PM ET**
+- **11:00 PM ET**
 
 You can also trigger a manual refresh using the API endpoint.
 
@@ -123,8 +121,6 @@ The Hustle Score is a custom composite metric that measures player effort and en
 2. Normalize each component against the league maximum
 3. Apply weights and sum to get a 0-100 score
 4. Calculate percentile against all NHL skaters with 10+ games
-
-This metric rewards players who skate hard, hit often, and spend time in the offensive zone - the qualities that Caps fans appreciate most.
 
 ## Tech Stack
 
@@ -176,7 +172,7 @@ Contributions welcome! Please open an issue first to discuss proposed changes.
 
 - **Data**: [NHL Edge](https://www.nhl.com/stats/edge) via the NHL API
 - **API Library**: [nhl-api-py](https://github.com/coreyjs/nhl-api-py) by Corey Schaf
-- **Inspiration**: The passionate Caps fan community
+- **Inspiration**: Caps fan community
 
 ## Support
 
