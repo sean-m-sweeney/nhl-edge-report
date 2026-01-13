@@ -597,6 +597,15 @@ async function fetchPlayers() {
             renderTeamSpeed();
         }
 
+        // If we're in goalies view, also fetch goalies data
+        if (currentView === 'goalies') {
+            await fetchGoalies();
+            goalieSortState = { field: 'wins', direction: 'desc' };
+            sortGoaliesArray(goalies, 'wins', 'desc');
+            renderTable();
+            updateSortIndicators();
+        }
+
     } catch (error) {
         console.error('Error fetching players:', error);
         loadingEl.innerHTML = '<div class="text-red-500 font-arcade text-xs">ERROR LOADING DATA</div>';
