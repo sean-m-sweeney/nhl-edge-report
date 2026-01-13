@@ -96,10 +96,10 @@ function renderPlayerRow(player) {
 
     return `
         <tr class="table-row group transition-colors">
-            <td class="sticky left-0 z-30 bg-void border-r border-grid-line p-3 font-mono text-gray-500 text-center">
-                ${player.jersey_number || '-'}
+            <td class="sticky left-0 z-30 bg-void border-r border-grid-line p-3 font-mono font-bold text-white text-center">
+                #${player.jersey_number || '-'}
             </td>
-            <td class="sticky left-[50px] z-30 bg-void border-r-2 border-neon-cyan/20 p-3 font-bold text-white truncate">
+            <td class="p-3 font-bold text-white truncate">
                 <a href="${getHockeyRefUrl(player.name)}" target="_blank" class="hover:text-neon-cyan hover:underline decoration-neon-cyan underline-offset-4">
                     ${player.name}
                 </a>
