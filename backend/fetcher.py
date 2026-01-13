@@ -285,7 +285,7 @@ def fetch_all_league_goalies(client: NHLClient) -> list:
             "ot_losses": goalie.get("otLosses"),
             "shutouts": goalie.get("shutouts"),
             "goals_against_avg": goalie.get("goalsAgainstAverage"),
-            "save_pct": goalie.get("savePctg"),
+            "save_pct": goalie.get("savePct"),
         })
 
     logger.info(f"Found {len(goalies)} qualified goalies across the league")
@@ -294,7 +294,7 @@ def fetch_all_league_goalies(client: NHLClient) -> list:
 
 def fetch_goalie_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]:
     """
-    Fetch Edge stats for a single goalie (high danger save %).
+    Fetch Edge stats for a single goalie (high danger save %, jersey number).
 
     Returns:
         Dict with goalie Edge stats or None if not available
@@ -308,11 +308,22 @@ def fetch_goalie_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]
     if not detail:
         return None
 
-    # Extract high danger save percentage
-    hd_saves = detail.get("highDangerSaves", {})
+    # Extract jersey number from player info
+    player_info = detail.get("player", {})
+    jersey_number = player_info.get("sweaterNumber")
+
+    # Extract high danger save percentage from shotLocationSummary
+    # Look for the 'high' location code which represents high-danger shots
+    high_danger_save_pct = None
+    shot_locations = detail.get("shotLocationSummary", [])
+    for location in shot_locations:
+        if location.get("locationCode") == "high":
+            high_danger_save_pct = location.get("savePctg")
+            break
 
     return {
-        "high_danger_save_pct": hd_saves.get("savePctg"),
+        "high_danger_save_pct": high_danger_save_pct,
+        "jersey_number": jersey_number,
     }
 
 
@@ -542,9 +553,12 @@ def refresh_data():
         for i, goalie in enumerate(all_goalies):
             player_id = goalie["player_id"]
             edge = fetch_goalie_edge_stats(client, player_id)
-            if edge and edge.get("high_danger_save_pct"):
-                goalie["high_danger_save_pct"] = edge["high_danger_save_pct"]
-                all_hdsv.append(edge["high_danger_save_pct"])
+            if edge:
+                if edge.get("high_danger_save_pct"):
+                    goalie["high_danger_save_pct"] = edge["high_danger_save_pct"]
+                    all_hdsv.append(edge["high_danger_save_pct"])
+                if edge.get("jersey_number"):
+                    goalie["jersey_number"] = edge["jersey_number"]
 
             if goalie.get("goals_against_avg") is not None:
                 all_gaa.append(goalie["goals_against_avg"])
