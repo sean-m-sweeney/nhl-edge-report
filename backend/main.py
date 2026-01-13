@@ -1,4 +1,4 @@
-"""FastAPI application for Chel Edge."""
+"""FastAPI application for Edge Report."""
 
 import os
 from typing import Optional
@@ -19,7 +19,7 @@ from backend.fetcher import refresh_data
 API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "dev-key-change-me")
 
 app = FastAPI(
-    title="Chel Edge API",
+    title="Edge Report API",
     description="NHL Edge stats in a comprehensive, sortable format",
     version="2.0.0"
 )
@@ -144,6 +144,139 @@ async def get_divisions():
     """Get list of all divisions grouped by conference."""
     divisions = database.get_divisions_list()
     return DivisionsResponse(divisions=divisions)
+
+
+@app.get("/api/goalies")
+async def get_goalies(
+    team: Optional[str] = Query(None, description="Team abbreviation (e.g., WSH, PIT)"),
+    division: Optional[str] = Query(None, description="Division name (Metropolitan, Atlantic, Central, Pacific)"),
+    conference: Optional[str] = Query(None, description="Conference name (Eastern, Western)")
+):
+    """
+    Get all goalies with stats.
+
+    Optional filters:
+    - team: Filter by team abbreviation (e.g., WSH for Capitals)
+    - division: Filter by division (Metropolitan, Atlantic, Central, Pacific)
+    - conference: Filter by conference (Eastern, Western)
+
+    If no filters provided, returns all league goalies.
+    """
+    rows = database.get_goalies_with_stats(
+        team_abbr=team,
+        division=division,
+        conference=conference
+    )
+
+    # Format goalie data for frontend
+    goalies = []
+    for row in rows:
+        goalie = {
+            "player_id": row["player_id"],
+            "name": row["name"],
+            "jersey_number": row.get("jersey_number"),
+            "team_abbr": row.get("team_abbr"),
+            "team_name": row.get("team_name"),
+            "division": row.get("division"),
+            "conference": row.get("conference"),
+            "games_played": row.get("games_played"),
+            "wins": row.get("wins"),
+            "losses": row.get("losses"),
+            "ot_losses": row.get("ot_losses"),
+            "shutouts": row.get("shutouts"),
+            "goals_against_avg": round(row["goals_against_avg"], 2) if row.get("goals_against_avg") else None,
+            "save_pct": round(row["save_pct"] * 100, 1) if row.get("save_pct") else None,
+            "high_danger_save_pct": round(row["high_danger_save_pct"] * 100, 1) if row.get("high_danger_save_pct") else None,
+            "gaa_percentile": row.get("gaa_percentile"),
+            "save_pct_percentile": row.get("save_pct_percentile"),
+            "hdsv_percentile": row.get("hdsv_percentile"),
+        }
+        goalies.append(goalie)
+
+    last_updated = database.get_last_updated()
+
+    return {
+        "goalies": goalies,
+        "last_updated": last_updated.isoformat() if last_updated else None,
+        "count": len(goalies)
+    }
+
+
+@app.get("/api/goalies/{player_id}")
+async def get_goalie(player_id: int):
+    """Get a single goalie with all stats."""
+    row = database.get_goalie_by_id(player_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Goalie not found")
+
+    goalie = {
+        "player_id": row["player_id"],
+        "name": row["name"],
+        "jersey_number": row.get("jersey_number"),
+        "team_abbr": row.get("team_abbr"),
+        "team_name": row.get("team_name"),
+        "division": row.get("division"),
+        "conference": row.get("conference"),
+        "games_played": row.get("games_played"),
+        "wins": row.get("wins"),
+        "losses": row.get("losses"),
+        "ot_losses": row.get("ot_losses"),
+        "shutouts": row.get("shutouts"),
+        "goals_against_avg": round(row["goals_against_avg"], 2) if row.get("goals_against_avg") else None,
+        "save_pct": round(row["save_pct"] * 100, 1) if row.get("save_pct") else None,
+        "high_danger_save_pct": round(row["high_danger_save_pct"] * 100, 1) if row.get("high_danger_save_pct") else None,
+        "gaa_percentile": row.get("gaa_percentile"),
+        "save_pct_percentile": row.get("save_pct_percentile"),
+        "hdsv_percentile": row.get("hdsv_percentile"),
+    }
+    last_updated = database.get_last_updated()
+
+    return {
+        "goalie": goalie,
+        "last_updated": last_updated.isoformat() if last_updated else None
+    }
+
+
+@app.get("/api/team-speed/{team_abbr}")
+async def get_team_speed(team_abbr: str):
+    """
+    Get team speed stats with league ranking.
+
+    Returns TOI-weighted average top speed, average bursts/game,
+    and the team's league rank.
+    """
+    # Get all teams for ranking
+    all_teams = database.get_all_teams_speed_stats()
+
+    # Find the requested team
+    team_stats = None
+    for team in all_teams:
+        if team["team_abbr"] == team_abbr.upper():
+            team_stats = team
+            break
+
+    if not team_stats:
+        raise HTTPException(status_code=404, detail="Team speed data not found")
+
+    return {
+        "team_abbr": team_stats["team_abbr"],
+        "team_name": team_stats["team_name"],
+        "weighted_avg_speed": team_stats["weighted_avg_speed"],
+        "avg_bursts_per_game": team_stats["avg_bursts_per_game"],
+        "rank": team_stats["rank"],
+        "total_teams": len(all_teams),
+        "player_count": team_stats["player_count"]
+    }
+
+
+@app.get("/api/team-speed")
+async def get_all_team_speeds():
+    """Get speed stats for all teams ranked by weighted average speed."""
+    all_teams = database.get_all_teams_speed_stats()
+    return {
+        "teams": all_teams,
+        "count": len(all_teams)
+    }
 
 
 @app.get("/api/health", response_model=HealthResponse)

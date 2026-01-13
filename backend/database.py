@@ -151,6 +151,31 @@ def init_db():
         )
     """)
 
+    # Goalies table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS goalies (
+            player_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            jersey_number INTEGER,
+            team_abbr TEXT,
+            team_name TEXT,
+            division TEXT,
+            conference TEXT,
+            games_played INTEGER,
+            wins INTEGER,
+            losses INTEGER,
+            ot_losses INTEGER,
+            shutouts INTEGER,
+            goals_against_avg REAL,
+            save_pct REAL,
+            high_danger_save_pct REAL,
+            gaa_percentile INTEGER,
+            save_pct_percentile INTEGER,
+            hdsv_percentile INTEGER,
+            updated_at DATETIME
+        )
+    """)
+
     # Metadata table for tracking updates
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS metadata (
@@ -208,6 +233,33 @@ def _run_migrations(cursor):
     # Drop old tables if they exist (no longer needed)
     cursor.execute("DROP TABLE IF EXISTS position_averages")
     cursor.execute("DROP TABLE IF EXISTS league_stats")
+
+    # Check if goalies table exists (for migrations)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='goalies'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS goalies (
+                player_id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                jersey_number INTEGER,
+                team_abbr TEXT,
+                team_name TEXT,
+                division TEXT,
+                conference TEXT,
+                games_played INTEGER,
+                wins INTEGER,
+                losses INTEGER,
+                ot_losses INTEGER,
+                shutouts INTEGER,
+                goals_against_avg REAL,
+                save_pct REAL,
+                high_danger_save_pct REAL,
+                gaa_percentile INTEGER,
+                save_pct_percentile INTEGER,
+                hdsv_percentile INTEGER,
+                updated_at DATETIME
+            )
+        """)
 
 
 def get_last_updated() -> Optional[datetime]:
@@ -358,6 +410,56 @@ def clear_all_player_data():
     conn.close()
 
 
+def upsert_goalie(player_id: int, name: str, jersey_number: Optional[int],
+                  team_abbr: Optional[str], stats: dict):
+    """Insert or update a goalie with all stats."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get team info
+    team_info = get_team_info(team_abbr) if team_abbr else {}
+
+    cursor.execute("""
+        INSERT OR REPLACE INTO goalies (
+            player_id, name, jersey_number, team_abbr, team_name,
+            division, conference, games_played, wins, losses, ot_losses,
+            shutouts, goals_against_avg, save_pct, high_danger_save_pct,
+            gaa_percentile, save_pct_percentile, hdsv_percentile, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        player_id,
+        name,
+        jersey_number,
+        team_abbr,
+        team_info.get("name"),
+        team_info.get("division"),
+        team_info.get("conference"),
+        stats.get("games_played"),
+        stats.get("wins"),
+        stats.get("losses"),
+        stats.get("ot_losses"),
+        stats.get("shutouts"),
+        stats.get("goals_against_avg"),
+        stats.get("save_pct"),
+        stats.get("high_danger_save_pct"),
+        stats.get("gaa_percentile"),
+        stats.get("save_pct_percentile"),
+        stats.get("hdsv_percentile"),
+        datetime.now().isoformat()
+    ))
+    conn.commit()
+    conn.close()
+
+
+def clear_all_goalie_data():
+    """Clear all goalie data for fresh refresh."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM goalies")
+    conn.commit()
+    conn.close()
+
+
 def get_league_shots_per_60() -> list:
     """Get all shots per 60 for percentile calculation."""
     conn = get_connection()
@@ -413,6 +515,188 @@ def get_league_toi_by_position() -> dict:
 
     conn.close()
     return {"F": forwards, "D": defensemen}
+
+
+def get_league_goalie_gaa() -> list:
+    """Get all GAA values for percentile calculation (lower is better)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT goals_against_avg FROM goalies
+        WHERE games_played >= 10 AND goals_against_avg IS NOT NULL
+        ORDER BY goals_against_avg DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [row["goals_against_avg"] for row in rows]
+
+
+def get_league_goalie_save_pct() -> list:
+    """Get all save percentage values for percentile calculation."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT save_pct FROM goalies
+        WHERE games_played >= 10 AND save_pct IS NOT NULL
+        ORDER BY save_pct
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [row["save_pct"] for row in rows]
+
+
+def get_league_goalie_hdsv() -> list:
+    """Get all high danger save pct values for percentile calculation."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT high_danger_save_pct FROM goalies
+        WHERE games_played >= 10 AND high_danger_save_pct IS NOT NULL
+        ORDER BY high_danger_save_pct
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [row["high_danger_save_pct"] for row in rows]
+
+
+def get_goalies_with_stats(team_abbr: Optional[str] = None,
+                           division: Optional[str] = None,
+                           conference: Optional[str] = None) -> list:
+    """Get goalies with stats, optionally filtered by team/division/conference."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    query = """
+        SELECT
+            player_id, name, jersey_number, team_abbr, team_name,
+            division, conference, games_played, wins, losses, ot_losses,
+            shutouts, goals_against_avg, save_pct, high_danger_save_pct,
+            gaa_percentile, save_pct_percentile, hdsv_percentile
+        FROM goalies
+        WHERE 1=1
+    """
+
+    params = []
+
+    if team_abbr:
+        query += " AND team_abbr = ?"
+        params.append(team_abbr)
+    elif division:
+        query += " AND division = ?"
+        params.append(division)
+    elif conference:
+        query += " AND conference = ?"
+        params.append(conference)
+
+    query += " ORDER BY wins DESC NULLS LAST"
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_goalie_by_id(player_id: int) -> Optional[dict]:
+    """Get a single goalie with all stats."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            player_id, name, jersey_number, team_abbr, team_name,
+            division, conference, games_played, wins, losses, ot_losses,
+            shutouts, goals_against_avg, save_pct, high_danger_save_pct,
+            gaa_percentile, save_pct_percentile, hdsv_percentile
+        FROM goalies
+        WHERE player_id = ?
+    """, (player_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_team_speed_stats(team_abbr: str) -> Optional[dict]:
+    """
+    Calculate TOI-weighted average top speed and average bursts/game for a team.
+
+    Returns dict with:
+    - weighted_avg_speed: TOI-weighted average top speed
+    - avg_bursts_per_game: Average bursts over 20 mph per game
+    - player_count: Number of players with speed data
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get players with speed data and TOI
+    cursor.execute("""
+        SELECT
+            e.top_speed_mph,
+            e.bursts_20_plus,
+            s.avg_toi,
+            s.games_played
+        FROM players p
+        JOIN player_edge_stats e ON p.player_id = e.player_id
+        JOIN player_stats s ON p.player_id = s.player_id
+        WHERE p.team_abbr = ?
+        AND e.top_speed_mph IS NOT NULL
+        AND s.avg_toi IS NOT NULL
+        AND s.games_played >= 10
+    """, (team_abbr,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        return None
+
+    # Calculate TOI-weighted average speed
+    total_toi = 0
+    weighted_speed_sum = 0
+    total_bursts = 0
+    total_games = 0
+
+    for row in rows:
+        toi = row["avg_toi"] or 0
+        speed = row["top_speed_mph"] or 0
+        bursts = row["bursts_20_plus"] or 0
+        games = row["games_played"] or 0
+
+        total_toi += toi
+        weighted_speed_sum += speed * toi
+        total_bursts += bursts
+        total_games += games
+
+    weighted_avg_speed = weighted_speed_sum / total_toi if total_toi > 0 else 0
+    avg_bursts_per_game = total_bursts / total_games if total_games > 0 else 0
+
+    return {
+        "weighted_avg_speed": round(weighted_avg_speed, 2),
+        "avg_bursts_per_game": round(avg_bursts_per_game, 2),
+        "player_count": len(rows)
+    }
+
+
+def get_all_teams_speed_stats() -> list:
+    """
+    Get speed stats for all teams for ranking purposes.
+
+    Returns list of dicts sorted by weighted_avg_speed descending.
+    """
+    results = []
+    for team_abbr in NHL_TEAMS.keys():
+        stats = get_team_speed_stats(team_abbr)
+        if stats:
+            stats["team_abbr"] = team_abbr
+            stats["team_name"] = NHL_TEAMS[team_abbr]["name"]
+            results.append(stats)
+
+    # Sort by weighted average speed (descending)
+    results.sort(key=lambda x: x["weighted_avg_speed"], reverse=True)
+
+    # Add rank
+    for i, team in enumerate(results):
+        team["rank"] = i + 1
+
+    return results
 
 
 def get_teams_list() -> list:

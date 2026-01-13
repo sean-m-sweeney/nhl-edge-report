@@ -1,5 +1,5 @@
 /**
- * Chel Edge - Frontend JavaScript
+ * Edge Report - Frontend JavaScript
  * Handles data fetching, table rendering, sorting, and filtering
  */
 
@@ -7,9 +7,12 @@
 let allPlayers = [];
 let forwards = [];
 let defensemen = [];
+let goalies = [];
 let teams = [];
-let currentView = 'forwards'; // 'forwards' or 'defensemen'
+let teamSpeed = null;
+let currentView = 'forwards'; // 'forwards', 'defensemen', or 'goalies'
 let sortState = { field: 'points', direction: 'desc' };
+let goalieSortState = { field: 'wins', direction: 'desc' };
 let filterState = {
     type: 'team',
     team: 'WSH',
@@ -32,6 +35,10 @@ const filterConferenceEl = document.getElementById('filter-conference');
 const playerCountEl = document.getElementById('player-count');
 const positionToggle = document.getElementById('position-toggle');
 const positionCountEl = document.getElementById('position-count');
+const goaliesBody = document.getElementById('goalies-body');
+const goalieTableWrapper = document.getElementById('goalie-table-wrapper');
+const skaterTableWrapper = document.querySelector('#players-table').parentElement;
+const teamSpeedDisplay = document.getElementById('team-speed-display');
 
 /**
  * Format relative time (e.g., "2 hours ago")
@@ -111,6 +118,7 @@ function renderPlayerRow(player) {
             <td class="p-3 text-right font-mono text-gray-400">${formatStat(stats.goals)}</td>
             <td class="p-3 text-right font-mono text-gray-400">${formatStat(stats.assists)}</td>
             <td class="p-3 text-right font-mono text-white font-bold">${formatStat(stats.points)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(stats.p60_percentile)}">${formatStat(stats.p60, 2)}</td>
             <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">${formatStat(stats.hits)}</td>
             <td class="p-3 text-right font-mono ${getPercentileClass(edge.top_speed_percentile)}">
                 ${formatStat(edge.top_speed_mph, 1)}
@@ -135,6 +143,41 @@ function renderPlayerRow(player) {
             </td>
             <td class="p-3 text-right font-mono ${getPercentileClass(edge.zone_starts_percentile)}">
                 ${edge.zone_starts_off_pct ? formatStat(edge.zone_starts_off_pct, 1) + '%' : '-'}
+            </td>
+        </tr>
+    `;
+}
+
+/**
+ * Render a single goalie row
+ */
+function renderGoalieRow(goalie) {
+    const showTeamCol = filterState.type !== 'team';
+
+    return `
+        <tr class="table-row group transition-colors">
+            <td class="sticky left-0 z-30 bg-void border-r border-grid-line p-3 font-mono font-bold text-white text-center">
+                #${goalie.jersey_number || '-'}
+            </td>
+            <td class="p-3 font-bold text-white truncate">
+                <a href="${getHockeyRefUrl(goalie.name)}" target="_blank" class="hover:text-neon-cyan hover:underline decoration-neon-cyan underline-offset-4">
+                    ${goalie.name}
+                </a>
+            </td>
+            <td class="p-3 text-gray-400 team-col ${showTeamCol ? '' : 'hidden'}">${goalie.team_abbr || '-'}</td>
+            <td class="p-3 text-right font-mono text-gray-400">${formatStat(goalie.games_played)}</td>
+            <td class="p-3 text-right font-mono text-gray-300">${formatStat(goalie.wins)}</td>
+            <td class="p-3 text-right font-mono text-gray-400">${formatStat(goalie.losses)}</td>
+            <td class="p-3 text-right font-mono text-gray-400">${formatStat(goalie.ot_losses)}</td>
+            <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">${formatStat(goalie.shutouts)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(goalie.gaa_percentile)}">
+                ${formatStat(goalie.goals_against_avg, 2)}
+            </td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(goalie.save_pct_percentile)}">
+                ${goalie.save_pct ? '.' + Math.round(goalie.save_pct * 10).toString().padStart(3, '0') : '-'}
+            </td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(goalie.hdsv_percentile)}">
+                ${goalie.high_danger_save_pct ? '.' + Math.round(goalie.high_danger_save_pct * 10).toString().padStart(3, '0') : '-'}
             </td>
         </tr>
     `;
@@ -167,6 +210,7 @@ function sortPlayersArray(playersArray, field, direction) {
         'goals': 'stats.goals',
         'assists': 'stats.assists',
         'points': 'stats.points',
+        'p60': 'stats.p60',
         'hits': 'stats.hits',
         'shots_per_60': 'stats.shots_per_60',
         'top_speed_mph': 'edge_stats.top_speed_mph',
@@ -204,36 +248,101 @@ function sortPlayersArray(playersArray, field, direction) {
  * Sort the current table
  */
 function sortTable(field) {
-    // Toggle direction if same field
-    if (sortState.field === field) {
-        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    if (currentView === 'goalies') {
+        // Goalie sorting
+        if (goalieSortState.field === field) {
+            goalieSortState.direction = goalieSortState.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            goalieSortState.field = field;
+            goalieSortState.direction = field === 'name' ? 'asc' : 'desc';
+        }
+        sortGoaliesArray(goalies, field, goalieSortState.direction);
     } else {
-        sortState.field = field;
-        sortState.direction = field === 'name' ? 'asc' : 'desc';
+        // Skater sorting
+        if (sortState.field === field) {
+            sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortState.field = field;
+            sortState.direction = field === 'name' ? 'asc' : 'desc';
+        }
+        const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
+        sortPlayersArray(currentPlayers, field, sortState.direction);
     }
-
-    const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
-    sortPlayersArray(currentPlayers, field, sortState.direction);
     renderTable();
     updateSortIndicators();
+}
+
+/**
+ * Sort goalies array by field
+ */
+function sortGoaliesArray(goaliesArray, field, direction) {
+    const fieldMap = {
+        'jersey_number': 'jersey_number',
+        'name': 'name',
+        'team_abbr': 'team_abbr',
+        'games_played': 'games_played',
+        'wins': 'wins',
+        'losses': 'losses',
+        'ot_losses': 'ot_losses',
+        'shutouts': 'shutouts',
+        'goals_against_avg': 'goals_against_avg',
+        'save_pct': 'save_pct',
+        'high_danger_save_pct': 'high_danger_save_pct'
+    };
+
+    const path = fieldMap[field] || field;
+
+    goaliesArray.sort((a, b) => {
+        let aVal = a[path];
+        let bVal = b[path];
+
+        // Handle nulls - push to end
+        if (aVal === null || aVal === undefined) return 1;
+        if (bVal === null || bVal === undefined) return -1;
+
+        // For GAA, lower is better so invert for desc
+        if (field === 'goals_against_avg') {
+            const comparison = aVal - bVal;
+            return direction === 'asc' ? -comparison : comparison;
+        }
+
+        // String comparison for name
+        if (typeof aVal === 'string') {
+            const comparison = aVal.localeCompare(bVal);
+            return direction === 'asc' ? comparison : -comparison;
+        }
+
+        // Numeric comparison
+        const comparison = aVal - bVal;
+        return direction === 'asc' ? comparison : -comparison;
+    });
 }
 
 /**
  * Update sort indicator arrows in headers
  */
 function updateSortIndicators() {
-    const table = document.getElementById('players-table');
+    // Remove all existing indicators from both tables
+    document.querySelectorAll('.sort-indicator').forEach(el => el.remove());
 
-    // Remove all existing indicators
-    table.querySelectorAll('.sort-indicator').forEach(el => el.remove());
-
-    // Add indicator to current sort column
-    const header = table.querySelector(`th[data-sort="${sortState.field}"]`);
-    if (header) {
-        const indicator = document.createElement('span');
-        indicator.className = 'sort-indicator ml-1 text-neon-pink';
-        indicator.textContent = sortState.direction === 'asc' ? '▲' : '▼';
-        header.appendChild(indicator);
+    if (currentView === 'goalies') {
+        const table = document.getElementById('goalies-table');
+        const header = table.querySelector(`th[data-sort="${goalieSortState.field}"]`);
+        if (header) {
+            const indicator = document.createElement('span');
+            indicator.className = 'sort-indicator ml-1 text-neon-pink';
+            indicator.textContent = goalieSortState.direction === 'asc' ? '▲' : '▼';
+            header.appendChild(indicator);
+        }
+    } else {
+        const table = document.getElementById('players-table');
+        const header = table.querySelector(`th[data-sort="${sortState.field}"]`);
+        if (header) {
+            const indicator = document.createElement('span');
+            indicator.className = 'sort-indicator ml-1 text-neon-pink';
+            indicator.textContent = sortState.direction === 'asc' ? '▲' : '▼';
+            header.appendChild(indicator);
+        }
     }
 }
 
@@ -241,18 +350,36 @@ function updateSortIndicators() {
  * Render the current table
  */
 function renderTable() {
-    const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
-    playersBody.innerHTML = currentPlayers.map(renderPlayerRow).join('');
-
-    // Update position count
-    positionCountEl.textContent = `${currentPlayers.length} ${currentView === 'forwards' ? 'forwards' : 'defensemen'}`;
+    if (currentView === 'goalies') {
+        // Show goalie table, hide skater table
+        skaterTableWrapper.classList.add('hidden');
+        goalieTableWrapper.classList.remove('hidden');
+        goaliesBody.innerHTML = goalies.map(renderGoalieRow).join('');
+        positionCountEl.textContent = `${goalies.length} goalies`;
+    } else {
+        // Show skater table, hide goalie table
+        skaterTableWrapper.classList.remove('hidden');
+        goalieTableWrapper.classList.add('hidden');
+        const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
+        playersBody.innerHTML = currentPlayers.map(renderPlayerRow).join('');
+        positionCountEl.textContent = `${currentPlayers.length} ${currentView === 'forwards' ? 'forwards' : 'defensemen'}`;
+    }
 }
 
 /**
- * Setup sort click handlers
+ * Setup sort click handlers for both skater and goalie tables
  */
 function setupSortHandlers() {
-    document.querySelectorAll('th[data-sort]').forEach(header => {
+    // Skater table sort handlers
+    document.querySelectorAll('#players-table th[data-sort]').forEach(header => {
+        header.addEventListener('click', () => {
+            const field = header.dataset.sort;
+            sortTable(field);
+        });
+    });
+
+    // Goalie table sort handlers
+    document.querySelectorAll('#goalies-table th[data-sort]').forEach(header => {
         header.addEventListener('click', () => {
             const field = header.dataset.sort;
             sortTable(field);
@@ -277,12 +404,21 @@ function setupInfoToggle() {
  */
 function setupPositionToggle() {
     if (positionToggle) {
-        positionToggle.addEventListener('change', () => {
+        positionToggle.addEventListener('change', async () => {
             currentView = positionToggle.value;
-            sortState = { field: 'points', direction: 'desc' };
 
-            const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
-            sortPlayersArray(currentPlayers, 'points', 'desc');
+            if (currentView === 'goalies') {
+                // Fetch goalies if not loaded or team changed
+                if (goalies.length === 0) {
+                    await fetchGoalies();
+                }
+                goalieSortState = { field: 'wins', direction: 'desc' };
+                sortGoaliesArray(goalies, 'wins', 'desc');
+            } else {
+                sortState = { field: 'points', direction: 'desc' };
+                const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
+                sortPlayersArray(currentPlayers, 'points', 'desc');
+            }
 
             renderTable();
             updateSortIndicators();
@@ -328,6 +464,12 @@ function updateTeamColumnVisibility() {
  */
 async function fetchPlayers() {
     try {
+        // Clear old data first (memory optimization)
+        allPlayers = [];
+        forwards = [];
+        defensemen = [];
+        goalies = []; // Clear goalies so they reload on next view
+
         const url = buildPlayersUrl();
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch players');
@@ -356,10 +498,119 @@ async function fetchPlayers() {
         loadingEl.classList.add('hidden');
         tableContainer.classList.remove('hidden');
 
+        // Fetch team speed if viewing a specific team
+        if (filterState.type === 'team') {
+            fetchTeamSpeed(filterState.team);
+        } else {
+            teamSpeed = null;
+            renderTeamSpeed();
+        }
+
     } catch (error) {
         console.error('Error fetching players:', error);
         loadingEl.innerHTML = '<div class="text-red-500 font-arcade text-xs">ERROR LOADING DATA</div>';
     }
+}
+
+/**
+ * Build API URL for goalies with current filters
+ */
+function buildGoaliesUrl() {
+    let url = '/api/goalies';
+    const params = new URLSearchParams();
+
+    switch (filterState.type) {
+        case 'team':
+            params.set('team', filterState.team);
+            break;
+        case 'division':
+            params.set('division', filterState.division);
+            break;
+        case 'conference':
+            params.set('conference', filterState.conference);
+            break;
+    }
+
+    const queryString = params.toString();
+    return queryString ? `${url}?${queryString}` : url;
+}
+
+/**
+ * Fetch goalies data from API
+ */
+async function fetchGoalies() {
+    try {
+        const url = buildGoaliesUrl();
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch goalies');
+
+        const data = await response.json();
+        goalies = data.goalies || [];
+
+        // Sort by wins by default
+        sortGoaliesArray(goalies, 'wins', 'desc');
+
+    } catch (error) {
+        console.error('Error fetching goalies:', error);
+        goalies = [];
+    }
+}
+
+/**
+ * Fetch team speed stats
+ */
+async function fetchTeamSpeed(teamAbbr) {
+    if (!teamAbbr) {
+        teamSpeed = null;
+        renderTeamSpeed();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/team-speed/${teamAbbr}`);
+        if (!response.ok) {
+            teamSpeed = null;
+        } else {
+            teamSpeed = await response.json();
+        }
+    } catch (error) {
+        console.error('Error fetching team speed:', error);
+        teamSpeed = null;
+    }
+    renderTeamSpeed();
+}
+
+/**
+ * Render team speed display
+ */
+function renderTeamSpeed() {
+    if (!teamSpeedDisplay) return;
+
+    if (!teamSpeed || filterState.type !== 'team') {
+        teamSpeedDisplay.classList.add('hidden');
+        return;
+    }
+
+    teamSpeedDisplay.classList.remove('hidden');
+    teamSpeedDisplay.innerHTML = `
+        <div class="flex items-center gap-6 text-xs">
+            <div class="flex items-center gap-2">
+                <span class="text-gray-500 uppercase tracking-wider">Team Speed</span>
+                <span class="font-mono text-neon-cyan font-bold">${teamSpeed.weighted_avg_speed} mph</span>
+                <span class="text-gray-600">(TOI-weighted avg)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-gray-500 uppercase tracking-wider">Bursts/Game</span>
+                <span class="font-mono text-neon-pink font-bold">${teamSpeed.avg_bursts_per_game}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-gray-500 uppercase tracking-wider">League Rank</span>
+                <span class="font-mono ${teamSpeed.rank <= 10 ? 'text-neon-cyan' : teamSpeed.rank >= 22 ? 'text-red-400' : 'text-gray-300'} font-bold">
+                    #${teamSpeed.rank}/${teamSpeed.total_teams}
+                </span>
+            </div>
+        </div>
+    `;
 }
 
 /**

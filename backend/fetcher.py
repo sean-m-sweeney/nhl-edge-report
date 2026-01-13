@@ -232,6 +232,97 @@ def fetch_traditional_stats(client: NHLClient) -> dict:
     return stats
 
 
+def fetch_all_league_goalies(client: NHLClient) -> list:
+    """
+    Fetch all NHL goalies with their stats.
+
+    Returns:
+        List of goalie dicts with id, name, team_abbr, and basic stats
+    """
+    logger.info("Fetching all league goalies...")
+    season = get_current_season()
+
+    filters = [
+        SeasonQuery(season_start=season, season_end=season),
+        GameTypeQuery(game_type="2"),
+    ]
+
+    qb = QueryBuilder()
+    query_ctx = qb.build(filters=filters)
+
+    try:
+        # Paginate through all goalies
+        all_goalies = []
+        for start in range(0, 200, 100):
+            result = client.stats.goalie_stats_with_query_context(
+                query_context=query_ctx,
+                report_type="summary",
+                limit=100,
+                start=start
+            )
+            batch = result.get("data", [])
+            if not batch:
+                break
+            all_goalies.extend(batch)
+            logger.info(f"Fetched goalie batch: {len(batch)} goalies (offset {start})")
+
+    except Exception as e:
+        logger.error(f"Error fetching league goalies: {e}")
+        return []
+
+    goalies = []
+    for goalie in all_goalies:
+        games_played = goalie.get("gamesPlayed", 0)
+        if games_played < MIN_GAMES_PLAYED:
+            continue
+
+        team_abbr = goalie.get("teamAbbrevs", "")
+        # If goalie played for multiple teams, get the most recent one
+        if "," in team_abbr:
+            team_abbr = team_abbr.split(",")[-1].strip()
+
+        goalies.append({
+            "player_id": goalie.get("playerId"),
+            "name": goalie.get("goalieFullName", ""),
+            "team_abbr": team_abbr,
+            "jersey_number": None,
+            "games_played": games_played,
+            "wins": goalie.get("wins"),
+            "losses": goalie.get("losses"),
+            "ot_losses": goalie.get("otLosses"),
+            "shutouts": goalie.get("shutouts"),
+            "goals_against_avg": goalie.get("goalsAgainstAverage"),
+            "save_pct": goalie.get("savePctg"),
+        })
+
+    logger.info(f"Found {len(goalies)} qualified goalies across the league")
+    return goalies
+
+
+def fetch_goalie_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]:
+    """
+    Fetch Edge stats for a single goalie (high danger save %).
+
+    Returns:
+        Dict with goalie Edge stats or None if not available
+    """
+    try:
+        detail = client.edge.goalie_detail(player_id=str(player_id))
+    except Exception as e:
+        logger.warning(f"Error fetching Edge stats for goalie {player_id}: {e}")
+        return None
+
+    if not detail:
+        return None
+
+    # Extract high danger save percentage
+    hd_saves = detail.get("highDangerSaves", {})
+
+    return {
+        "high_danger_save_pct": hd_saves.get("savePctg"),
+    }
+
+
 def fetch_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]:
     """
     Fetch Edge stats for a single player.
@@ -443,6 +534,72 @@ def refresh_data():
 
             database.upsert_player_edge_stats(player_id, edge)
             players_updated += 1
+
+    # 9. Fetch and save all goalies
+    logger.info("Fetching goalie data...")
+    all_goalies = fetch_all_league_goalies(client)
+
+    if all_goalies:
+        # Collect values for percentile calculation
+        all_gaa = []
+        all_save_pct = []
+        all_hdsv = []
+
+        # First pass: get Edge stats for all goalies
+        for i, goalie in enumerate(all_goalies):
+            player_id = goalie["player_id"]
+            edge = fetch_goalie_edge_stats(client, player_id)
+            if edge and edge.get("high_danger_save_pct"):
+                goalie["high_danger_save_pct"] = edge["high_danger_save_pct"]
+                all_hdsv.append(edge["high_danger_save_pct"])
+
+            if goalie.get("goals_against_avg") is not None:
+                all_gaa.append(goalie["goals_against_avg"])
+            if goalie.get("save_pct") is not None:
+                all_save_pct.append(goalie["save_pct"])
+
+            if (i + 1) % 20 == 0:
+                logger.info(f"Fetched goalie Edge stats: {i + 1}/{len(all_goalies)}")
+
+        # Sort for percentile calculation (GAA reversed since lower is better)
+        all_gaa.sort(reverse=True)  # Lower GAA = higher percentile
+        all_save_pct.sort()
+        all_hdsv.sort()
+
+        logger.info(f"GAA samples: {len(all_gaa)}, SV% samples: {len(all_save_pct)}, HDSV% samples: {len(all_hdsv)}")
+
+        # Second pass: save goalies with percentiles
+        goalies_updated = 0
+        for goalie in all_goalies:
+            stats = {
+                "games_played": goalie.get("games_played"),
+                "wins": goalie.get("wins"),
+                "losses": goalie.get("losses"),
+                "ot_losses": goalie.get("ot_losses"),
+                "shutouts": goalie.get("shutouts"),
+                "goals_against_avg": goalie.get("goals_against_avg"),
+                "save_pct": goalie.get("save_pct"),
+                "high_danger_save_pct": goalie.get("high_danger_save_pct"),
+            }
+
+            # Calculate percentiles
+            if stats.get("goals_against_avg") is not None and all_gaa:
+                stats["gaa_percentile"] = calculate_percentile(stats["goals_against_avg"], all_gaa)
+            if stats.get("save_pct") is not None and all_save_pct:
+                stats["save_pct_percentile"] = calculate_percentile(stats["save_pct"], all_save_pct)
+            if stats.get("high_danger_save_pct") is not None and all_hdsv:
+                stats["hdsv_percentile"] = calculate_percentile(stats["high_danger_save_pct"], all_hdsv)
+
+            database.upsert_goalie(
+                player_id=goalie["player_id"],
+                name=goalie["name"],
+                jersey_number=goalie.get("jersey_number"),
+                team_abbr=goalie.get("team_abbr"),
+                stats=stats
+            )
+            goalies_updated += 1
+
+        logger.info(f"Updated {goalies_updated} goalies")
 
     # Update timestamp
     database.set_last_updated(datetime.now())
