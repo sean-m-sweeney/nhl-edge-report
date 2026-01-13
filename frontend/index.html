@@ -3,252 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chel Edge - NHL Edge Stats</title>
+    <title>CHEL EDGE // 1994</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=5">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
+                    fontFamily: {
+                        'arcade': ['"Press Start 2P"', 'cursive'],
+                        'mono': ['"JetBrains Mono"', 'monospace'],
+                    },
                     colors: {
-                        'caps-red': '#C8102E',
-                        'caps-navy': '#041E42',
-                        'dark-bg': '#1a1a2e',
-                        'dark-card': '#16213e',
-                        'dark-border': '#374151'
+                        'void': '#09090b',
+                        'void-light': '#18181b',
+                        'neon-cyan': '#00f3ff',
+                        'neon-pink': '#ff00ff',
+                        'neon-green': '#39ff14',
+                        'grid-line': '#27272a',
                     }
                 }
             }
         }
     </script>
 </head>
-<body class="bg-dark-bg text-white min-h-screen">
-    <!-- Header -->
-    <header class="bg-caps-navy border-b border-dark-border">
-        <div class="container mx-auto px-4 py-6">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 class="text-3xl md:text-4xl font-bold text-caps-red">Chel Edge</h1>
-                    <p class="text-gray-400 mt-1">NHL Edge stats in a comprehensive, sortable format</p>
+<body class="bg-void text-gray-300 font-mono min-h-screen selection:bg-neon-pink selection:text-white">
+    <header class="border-b-2 border-neon-cyan bg-void-light sticky top-0 z-50">
+        <div class="max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-neon-cyan/20 border border-neon-cyan flex items-center justify-center">
+                    <div class="w-4 h-2 bg-neon-cyan"></div>
                 </div>
-                <div class="mt-4 md:mt-0 text-sm text-gray-400">
-                    <span id="last-updated">Loading...</span>
-                </div>
+                <h1 class="font-arcade text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan to-neon-pink drop-shadow-[0_0_5px_rgba(0,243,255,0.5)]">
+                    CHEL EDGE
+                </h1>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                 <span class="text-neon-cyan animate-pulse">● LIVE DATA</span>
+                 <span id="last-updated" class="text-gray-500">Initializing...</span>
             </div>
         </div>
     </header>
 
-    <!-- Filter Bar -->
-    <div class="bg-dark-card border-b border-dark-border">
-        <div class="max-w-[1800px] mx-auto px-4 py-3">
-            <div class="flex flex-wrap items-center gap-3">
-                <label class="text-sm text-gray-400">View:</label>
-                <select id="filter-type" class="bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
-                    <option value="team">Team</option>
-                    <option value="division">Division</option>
-                    <option value="conference">Conference</option>
-                    <option value="league">League</option>
-                </select>
-
-                <select id="filter-team" class="bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
-                    <option value="WSH">Washington Capitals</option>
-                </select>
-
-                <select id="filter-division" class="hidden bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
-                    <option value="Metropolitan">Metropolitan</option>
-                    <option value="Atlantic">Atlantic</option>
-                    <option value="Central">Central</option>
-                    <option value="Pacific">Pacific</option>
-                </select>
-
-                <select id="filter-conference" class="hidden bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-caps-red">
-                    <option value="Eastern">Eastern Conference</option>
-                    <option value="Western">Western Conference</option>
-                </select>
-
-                <span id="player-count" class="text-sm text-gray-500 ml-auto"></span>
+    <!-- Info Section -->
+    <div class="bg-void-light border-b border-grid-line">
+        <div class="max-w-[1920px] mx-auto">
+            <button id="info-toggle" class="w-full px-4 py-3 text-left text-xs text-gray-400 hover:text-neon-cyan flex items-center gap-2 transition-colors">
+                <span class="text-neon-cyan">?</span>
+                <span>How to read this data</span>
+                <span id="info-arrow" class="ml-auto transition-transform">▼</span>
+            </button>
+            <div id="info-content" class="hidden px-4 pb-4">
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                    <div class="bg-void p-3 border border-grid-line">
+                        <h3 class="text-neon-cyan font-bold mb-2">TRADITIONAL STATS</h3>
+                        <ul class="space-y-1 text-gray-400">
+                            <li><span class="text-white">GP</span> — Games Played</li>
+                            <li><span class="text-white">TOI</span> — Avg Time On Ice (min/game)</li>
+                            <li><span class="text-white">G / A / PTS</span> — Goals / Assists / Points</li>
+                            <li><span class="text-white">HITS</span> — Total hits this season</li>
+                        </ul>
+                    </div>
+                    <div class="bg-void p-3 border border-grid-line">
+                        <h3 class="text-neon-green font-bold mb-2">SKATING (NHL EDGE)</h3>
+                        <ul class="space-y-1 text-gray-400">
+                            <li><span class="text-white">TOP MPH</span> — Fastest speed recorded</li>
+                            <li><span class="text-white">BURST 20+</span> — Sprints over 20 mph</li>
+                            <li><span class="text-white">BURST 22+</span> — Sprints over 22 mph</li>
+                            <li><span class="text-white">DIST/G</span> — Miles skated per game</li>
+                        </ul>
+                    </div>
+                    <div class="bg-void p-3 border border-grid-line">
+                        <h3 class="text-neon-pink font-bold mb-2">SHOOTING & DEPLOYMENT</h3>
+                        <ul class="space-y-1 text-gray-400">
+                            <li><span class="text-white">SLAP MPH</span> — Hardest shot recorded</li>
+                            <li><span class="text-white">S/60</span> — Shots per 60 min of ice time</li>
+                            <li><span class="text-white">OZ%</span> — % of 5v5 time in offensive zone</li>
+                            <li><span class="text-white">ZS%</span> — Offensive zone start % (deployment)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3 text-[10px] text-gray-500">
+                    <span class="text-neon-green">● Green highlighting</span> = 75th+ percentile league-wide &nbsp;|&nbsp;
+                    <span class="text-neon-pink">● Pink highlighting</span> = 90th+ percentile (elite)
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Main Content -->
-    <main class="max-w-[1800px] mx-auto px-4 py-6">
-        <!-- Loading State -->
-        <div id="loading" class="flex items-center justify-center py-20">
-            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-caps-red"></div>
-            <span class="ml-4 text-gray-400">Loading player data...</span>
-        </div>
-
-        <!-- Error State -->
-        <div id="error" class="hidden bg-red-900/30 border border-red-500 rounded-lg p-6 text-center">
-            <p class="text-red-400">Failed to load player data. Please try again later.</p>
-        </div>
-
-        <!-- Info Section -->
-        <div id="info-section" class="hidden info-section">
-            <button class="info-toggle" id="info-toggle">How to read this data ▼</button>
-            <div class="info-content" id="info-content">
-                <div class="info-block">
-                    <h3>What is Chel Edge?</h3>
-                    <p>Chel Edge combines traditional NHL stats with NHL Edge tracking data in one sortable view. Filter by team, division, conference, or view the entire league. Click any column header to sort.</p>
-                </div>
-
-                <div class="info-block">
-                    <h3>Understanding Percentiles</h3>
-                    <p>Many stats show the raw value followed by a <span class="percentile-example">(percentile)</span> in parentheses. The percentile tells you how a player ranks league-wide among all NHL skaters with 10+ games played.</p>
-                    <ul>
-                        <li><strong>90th percentile</strong> = Top 10% in the league</li>
-                        <li><strong>50th percentile</strong> = League average</li>
-                        <li><strong>10th percentile</strong> = Bottom 10% in the league</li>
-                    </ul>
-                    <p>Cells are color-coded: <span class="green-example">green</span> for 75th percentile and above, <span class="red-example">red</span> for below 25th percentile.</p>
-                </div>
-
-                <div class="info-block">
-                    <h3>Stats Glossary</h3>
-                    <ul>
-                        <li><strong>TOI</strong> — Average time on ice per game (minutes)</li>
-                        <li><strong>P/60</strong> — Points per 60 minutes of ice time. Normalizes production regardless of ice time.</li>
-                        <li><strong>Top Speed</strong> — Fastest skating speed recorded this season (mph)</li>
-                        <li><strong>Bursts 20+/22+</strong> — Number of times player exceeded 20 or 22 mph</li>
-                        <li><strong>Dist/G</strong> — Average miles skated per game</li>
-                        <li><strong>O-Zone% / D-Zone%</strong> — Percentage of 5v5 time spent in offensive/defensive zone</li>
-                        <li><strong>ZS%</strong> — Offensive zone start percentage (higher = more o-zone faceoffs)</li>
-                        <li><strong>Shot Speed</strong> — Fastest shot recorded this season (mph)</li>
-                        <li><strong>Shots/60</strong> — Shot attempts per 60 minutes of ice time</li>
-                    </ul>
-                </div>
+    <!-- Filter Bar -->
+    <div class="bg-void border-b border-grid-line p-4">
+        <div class="max-w-[1920px] mx-auto flex flex-wrap gap-4 items-center">
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] uppercase tracking-widest text-gray-500">Scope</span>
+                <select id="filter-type" class="bg-void-light border border-gray-700 text-neon-cyan text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+                    <option value="team">By Team</option>
+                    <option value="division">By Division</option>
+                    <option value="conference">By Conference</option>
+                    <option value="league">Full League</option>
+                </select>
+            </div>
+            <select id="filter-team" class="bg-void-light border border-gray-700 text-white text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+                <option value="WSH">Washington Capitals</option>
+            </select>
+            <select id="filter-division" class="hidden bg-void-light border border-gray-700 text-white text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+                <option value="Metropolitan">Metropolitan</option>
+                <option value="Atlantic">Atlantic</option>
+                <option value="Central">Central</option>
+                <option value="Pacific">Pacific</option>
+            </select>
+            <select id="filter-conference" class="hidden bg-void-light border border-gray-700 text-white text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+                <option value="Eastern">Eastern Conf</option>
+                <option value="Western">Western Conf</option>
+            </select>
+            <select id="position-toggle" class="bg-void-light border border-neon-green text-neon-green text-xs p-2 rounded-none focus:border-neon-green focus:outline-none uppercase cursor-pointer">
+                <option value="forwards">Forwards</option>
+                <option value="defensemen">Defensemen</option>
+            </select>
+            <div class="ml-auto flex items-center gap-4 font-arcade text-[10px] text-gray-500">
+                <span id="position-count"></span>
+                <span>PLAYERS: <span id="player-count" class="text-neon-pink">0</span></span>
             </div>
         </div>
+    </div>
 
-        <!-- Stats Tables -->
-        <div id="table-container" class="hidden space-y-8">
-            <!-- Forwards Section -->
-            <div>
-                <h2 class="text-xl font-bold text-caps-red mb-3">Forwards</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm" id="forwards-table">
-                        <thead class="sticky top-0 z-10">
-                            <tr class="bg-caps-navy text-left">
-                                <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number" data-table="forwards">#</th>
-                                <th class="table-header min-w-[150px]" data-sort="name" data-table="forwards">Name</th>
-                                <th class="table-header team-col hidden" data-sort="team_abbr" data-table="forwards">Team</th>
-                                <th class="table-header" data-sort="position" data-table="forwards">Pos</th>
-                                <th class="table-header" data-sort="games_played" data-table="forwards">GP</th>
-                                <th class="table-header" data-sort="avg_toi" data-table="forwards">TOI</th>
-                                <th class="table-header" data-sort="goals" data-table="forwards">G</th>
-                                <th class="table-header" data-sort="assists" data-table="forwards">A</th>
-                                <th class="table-header" data-sort="points" data-table="forwards">P</th>
-                                <th class="table-header" data-sort="p60" data-table="forwards">P/60</th>
-                                <th class="table-header" data-sort="plus_minus" data-table="forwards">+/-</th>
-                                <th class="table-header" data-sort="hits" data-table="forwards">Hits</th>
-                                <th class="table-header" data-sort="pim" data-table="forwards">PIM</th>
-                                <th class="table-header" data-sort="shots_per_60" data-table="forwards">Shots/60</th>
-                                <th class="table-header" data-sort="faceoff_win_pct" data-table="forwards">FO%</th>
-                                <th class="table-header edge-header" data-sort="top_speed_mph" data-table="forwards">Top Speed</th>
-                                <th class="table-header edge-header" data-sort="bursts_20_plus" data-table="forwards">Bursts 20+</th>
-                                <th class="table-header edge-header" data-sort="bursts_22_plus" data-table="forwards">Bursts 22+</th>
-                                <th class="table-header edge-header" data-sort="distance_per_game_miles" data-table="forwards">Dist/G</th>
-                                <th class="table-header edge-header" data-sort="off_zone_time_pct" data-table="forwards">O-Zone%</th>
-                                <th class="table-header edge-header" data-sort="def_zone_time_pct" data-table="forwards">D-Zone%</th>
-                                <th class="table-header edge-header" data-sort="zone_starts_off_pct" data-table="forwards">ZS%</th>
-                                <th class="table-header edge-header" data-sort="top_shot_speed_mph" data-table="forwards">Shot Speed</th>
+    <main class="max-w-[1920px] mx-auto p-0 md:p-4">
+        <div id="loading" class="py-20 text-center">
+            <div class="inline-block w-4 h-4 bg-neon-cyan animate-bounce mr-1"></div>
+            <div class="inline-block w-4 h-4 bg-neon-pink animate-bounce mr-1" style="animation-delay: 0.1s"></div>
+            <div class="inline-block w-4 h-4 bg-neon-green animate-bounce" style="animation-delay: 0.2s"></div>
+            <div class="mt-4 font-arcade text-xs text-neon-cyan">LOADING ROSTERS...</div>
+        </div>
+
+        <div id="table-container" class="hidden">
+            <div class="border border-grid-line bg-void-light/50 backdrop-blur-sm">
+                <!-- Single Table -->
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-xs text-left border-collapse" id="players-table">
+                        <thead class="sticky top-0 z-30 bg-void border-b-2 border-neon-cyan text-neon-cyan font-bold tracking-wider">
+                            <tr>
+                                <th class="p-3 sticky left-0 z-40 bg-void border-r border-grid-line min-w-[50px] cursor-pointer hover:text-white" data-sort="jersey_number" title="Jersey Number">#</th>
+                                <th class="p-3 sticky left-[50px] z-40 bg-void border-r-2 border-neon-cyan/50 min-w-[160px] cursor-pointer hover:text-white" data-sort="name" title="Player Name">PLAYER</th>
+                                <th class="p-3 whitespace-nowrap team-col hidden cursor-pointer hover:text-white" data-sort="team_abbr" title="Team">TM</th>
+                                <th class="p-3 whitespace-nowrap cursor-pointer hover:text-white" data-sort="position" title="Position">POS</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="games_played" title="Games Played">GP</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="avg_toi" title="Average Time On Ice (minutes per game)">TOI</th>
+                                <th class="p-3 whitespace-nowrap text-right text-gray-400 cursor-pointer hover:text-white" data-sort="goals" title="Goals">G</th>
+                                <th class="p-3 whitespace-nowrap text-right text-gray-400 cursor-pointer hover:text-white" data-sort="assists" title="Assists">A</th>
+                                <th class="p-3 whitespace-nowrap text-right text-white font-bold cursor-pointer hover:text-neon-cyan" data-sort="points" title="Total Points">PTS</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white border-r border-grid-line" data-sort="hits" title="Total Hits this season">HITS</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="top_speed_mph" title="Top skating speed recorded this season (mph)">TOP MPH</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_20_plus" title="Number of skating bursts over 20 mph">BURST 20+</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_22_plus" title="Number of skating bursts over 22 mph (elite speed)">BURST 22+</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green border-r border-grid-line cursor-pointer hover:text-white" data-sort="distance_per_game_miles" title="Distance skated per game (miles)">DIST/G</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-pink cursor-pointer hover:text-white" data-sort="top_shot_speed_mph" title="Hardest shot recorded this season (mph)">SLAP MPH</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-pink cursor-pointer hover:text-white border-r border-grid-line" data-sort="shots_per_60" title="Shot attempts per 60 minutes of ice time">S/60</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="off_zone_time_pct" title="Percentage of 5v5 ice time spent in offensive zone">OZ%</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="zone_starts_off_pct" title="Offensive zone faceoff start percentage (higher = more sheltered deployment)">ZS%</th>
                             </tr>
                         </thead>
-                        <tbody id="forwards-body">
-                            <!-- Forwards will be inserted here -->
-                        </tbody>
+                        <tbody id="players-body" class="divide-y divide-grid-line"></tbody>
                     </table>
                 </div>
             </div>
-
-            <!-- Defensemen Section -->
-            <div>
-                <h2 class="text-xl font-bold text-caps-red mb-3">Defensemen</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm" id="defensemen-table">
-                        <thead class="sticky top-0 z-10">
-                            <tr class="bg-caps-navy text-left">
-                                <th class="table-header sticky left-0 z-20 bg-caps-navy w-10" data-sort="jersey_number" data-table="defensemen">#</th>
-                                <th class="table-header min-w-[150px]" data-sort="name" data-table="defensemen">Name</th>
-                                <th class="table-header team-col hidden" data-sort="team_abbr" data-table="defensemen">Team</th>
-                                <th class="table-header" data-sort="position" data-table="defensemen">Pos</th>
-                                <th class="table-header" data-sort="games_played" data-table="defensemen">GP</th>
-                                <th class="table-header" data-sort="avg_toi" data-table="defensemen">TOI</th>
-                                <th class="table-header" data-sort="goals" data-table="defensemen">G</th>
-                                <th class="table-header" data-sort="assists" data-table="defensemen">A</th>
-                                <th class="table-header" data-sort="points" data-table="defensemen">P</th>
-                                <th class="table-header" data-sort="p60" data-table="defensemen">P/60</th>
-                                <th class="table-header" data-sort="plus_minus" data-table="defensemen">+/-</th>
-                                <th class="table-header" data-sort="hits" data-table="defensemen">Hits</th>
-                                <th class="table-header" data-sort="pim" data-table="defensemen">PIM</th>
-                                <th class="table-header" data-sort="shots_per_60" data-table="defensemen">Shots/60</th>
-                                <th class="table-header" data-sort="faceoff_win_pct" data-table="defensemen">FO%</th>
-                                <th class="table-header edge-header" data-sort="top_speed_mph" data-table="defensemen">Top Speed</th>
-                                <th class="table-header edge-header" data-sort="bursts_20_plus" data-table="defensemen">Bursts 20+</th>
-                                <th class="table-header edge-header" data-sort="bursts_22_plus" data-table="defensemen">Bursts 22+</th>
-                                <th class="table-header edge-header" data-sort="distance_per_game_miles" data-table="defensemen">Dist/G</th>
-                                <th class="table-header edge-header" data-sort="off_zone_time_pct" data-table="defensemen">O-Zone%</th>
-                                <th class="table-header edge-header" data-sort="def_zone_time_pct" data-table="defensemen">D-Zone%</th>
-                                <th class="table-header edge-header" data-sort="zone_starts_off_pct" data-table="defensemen">ZS%</th>
-                                <th class="table-header edge-header" data-sort="top_shot_speed_mph" data-table="defensemen">Shot Speed</th>
-                            </tr>
-                        </thead>
-                        <tbody id="defensemen-body">
-                            <!-- Defensemen will be inserted here -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Legend -->
-        <div id="legend" class="hidden mt-6 p-4 bg-dark-card rounded-lg border border-dark-border">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">Legend</h3>
-            <div class="flex flex-wrap gap-4 text-xs text-gray-400">
-                <div class="flex items-center gap-2">
-                    <span class="w-4 h-4 rounded bg-green-500/30"></span>
-                    <span>75th+ percentile</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="w-4 h-4 rounded bg-red-500/30"></span>
-                    <span>Below 25th percentile</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-gray-500">(##)</span>
-                    <span>League percentile</span>
-                </div>
-            </div>
-            <p class="text-xs text-gray-500 mt-2">
-                Data refreshed daily. Only includes skaters with 10+ games played.
-            </p>
         </div>
     </main>
-
-    <!-- Footer -->
-    <footer class="bg-caps-navy border-t border-dark-border mt-12">
-        <div class="container mx-auto px-4 py-8">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                <!-- Ko-fi Button -->
-                <div>
-                    <a href="https://ko-fi.com/cheledge" target="_blank" rel="noopener"
-                       class="inline-flex items-center gap-2 px-4 py-2 bg-[#FF5E5B] hover:bg-[#ff4744] text-white rounded-lg transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311z"/>
-                        </svg>
-                        If you find this useful, buy me a coffee
-                    </a>
-                </div>
-
-                <!-- Disclaimer -->
-                <div class="text-xs text-gray-500 text-center md:text-right">
-                    <p>Data sourced from NHL Edge. Not affiliated with the NHL.</p>
-                    <p class="mt-1">&copy; 2026 Chel Edge</p>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-    <script src="app.js"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

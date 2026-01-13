@@ -86,8 +86,6 @@ def fetch_all_league_skaters(client: NHLClient) -> list:
     players = []
     for skater in all_skaters:
         games_played = skater.get("gamesPlayed", 0)
-        if games_played < MIN_GAMES_PLAYED:
-            continue
 
         # Get position (skip goalies)
         position = skater.get("positionCode", "")
