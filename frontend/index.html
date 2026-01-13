@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=6">
+    <link rel="stylesheet" href="styles.css?v=7">
     <script>
         tailwind.config = {
             theme: {
@@ -34,9 +34,7 @@
     <header class="border-b-2 border-neon-cyan bg-void-light sticky top-0 z-50">
         <div class="max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-neon-cyan/20 border border-neon-cyan flex items-center justify-center">
-                    <div class="w-4 h-2 bg-neon-cyan"></div>
-                </div>
+                <img src="logo.jpg" alt="Chel Edge Logo" class="w-10 h-10 rounded border border-neon-cyan/50">
                 <h1 class="font-arcade text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan to-neon-pink drop-shadow-[0_0_5px_rgba(0,243,255,0.5)]">
                     CHEL EDGE
                 </h1>
@@ -47,6 +45,15 @@
             </div>
         </div>
     </header>
+
+    <!-- Hero Banner -->
+    <div class="relative w-full h-32 md:h-48 overflow-hidden">
+        <img src="hero.jpg" alt="Chel Edge Banner" class="w-full h-full object-cover opacity-60">
+        <div class="absolute inset-0 bg-gradient-to-t from-void via-transparent to-transparent"></div>
+        <div class="absolute bottom-4 left-4 md:left-8">
+            <p class="font-arcade text-xs md:text-sm text-neon-cyan drop-shadow-[0_0_10px_rgba(0,243,255,0.8)]">BEYOND THE BOX SCORE</p>
+        </div>
+    </div>
 
     <!-- Info Section -->
     <div class="bg-void-light border-b border-grid-line">
@@ -216,6 +223,6 @@
         </div>
     </footer>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
 </body>
 </html>
