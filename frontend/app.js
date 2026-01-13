@@ -245,7 +245,7 @@ function renderTable() {
     playersBody.innerHTML = currentPlayers.map(renderPlayerRow).join('');
 
     // Update position count
-    positionCountEl.textContent = `${currentPlayers.length} players`;
+    positionCountEl.textContent = `${currentPlayers.length} ${currentView === 'forwards' ? 'forwards' : 'defensemen'}`;
 }
 
 /**
