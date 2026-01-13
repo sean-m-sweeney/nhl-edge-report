@@ -568,8 +568,8 @@ def refresh_data():
             if (i + 1) % 20 == 0:
                 logger.info(f"Fetched goalie Edge stats: {i + 1}/{len(all_goalies)}")
 
-        # Sort for percentile calculation (GAA reversed since lower is better)
-        all_gaa.sort(reverse=True)  # Lower GAA = higher percentile
+        # Sort for percentile calculation
+        all_gaa.sort()
         all_save_pct.sort()
         all_hdsv.sort()
 
@@ -591,7 +591,9 @@ def refresh_data():
 
             # Calculate percentiles
             if stats.get("goals_against_avg") is not None and all_gaa:
-                stats["gaa_percentile"] = calculate_percentile(stats["goals_against_avg"], all_gaa)
+                # For GAA, lower is better, so invert the percentile (100 - pct)
+                raw_pct = calculate_percentile(stats["goals_against_avg"], all_gaa)
+                stats["gaa_percentile"] = (100 - raw_pct) if raw_pct is not None else None
             if stats.get("save_pct") is not None and all_save_pct:
                 stats["save_pct_percentile"] = calculate_percentile(stats["save_pct"], all_save_pct)
             if stats.get("high_danger_save_pct") is not None and all_hdsv:
