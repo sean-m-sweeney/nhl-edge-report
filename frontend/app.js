@@ -3,8 +3,7 @@
  * Handles data fetching, table rendering, sorting, and filtering
  */
 
-// State
-let allPlayers = [];
+// State - use single arrays, not duplicates
 let forwards = [];
 let defensemen = [];
 let goalies = [];
@@ -465,25 +464,30 @@ function updateTeamColumnVisibility() {
 async function fetchPlayers() {
     try {
         // Clear old data first (memory optimization)
-        allPlayers = [];
-        forwards = [];
-        defensemen = [];
-        goalies = []; // Clear goalies so they reload on next view
+        forwards.length = 0;
+        defensemen.length = 0;
+        goalies.length = 0;
 
         const url = buildPlayersUrl();
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch players');
 
         const data = await response.json();
-        allPlayers = data.players;
 
-        // Split into forwards and defensemen
-        forwards = allPlayers.filter(p => ['C', 'L', 'R'].includes(p.position));
-        defensemen = allPlayers.filter(p => p.position === 'D');
+        // Direct assignment to position arrays - no intermediate storage
+        for (const p of data.players) {
+            if (p.position === 'D') {
+                defensemen.push(p);
+            } else {
+                forwards.push(p);
+            }
+        }
+        // Let data.players be garbage collected immediately
+        data.players = null;
 
         // Update UI
         lastUpdatedEl.textContent = formatRelativeTime(data.last_updated);
-        playerCountEl.textContent = data.count;
+        playerCountEl.textContent = forwards.length + defensemen.length;
 
         // Sort by points by default
         sortPlayersArray(forwards, 'points', 'desc');
