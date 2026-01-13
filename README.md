@@ -1,27 +1,35 @@
-# Chel Edge
+# Edge Report
 
-NHL Edge stats in a comprehensive, sortable format.
+Beyond the box score. NHL Edge tracking stats in a comprehensive, sortable format.
 
-![Screenshot placeholder](screenshot.png)
+**Live site**: [nhledgereport.com](https://www.nhledgereport.com)
+
+![Screenshot](screenshot.png)
 
 ## Overview
 
-Chel Edge combines traditional NHL stats with NHL Edge tracking data in one sortable view. Filter by team, division, conference, or view the entire league. Every stat includes a league-wide percentile for comparison.
+Edge Report combines traditional NHL stats with NHL Edge tracking data in one sortable view. Filter by team, division, conference, or view the entire league. Every stat includes a league-wide percentile for comparison.
 
 ## Features
 
 - **League-Wide Coverage**: View stats for any NHL team, division, conference, or entire league
-- **Traditional Stats**: GP, TOI, G, A, P, P/60, +/-, Hits, PIM, Shots/60, FO%
-- **Edge Stats with Percentiles**:
+- **Position Toggle**: Switch between Forwards, Defensemen, and Goalies
+- **Team Speed Display**: View team-wide skating metrics when filtering by team
+- **Traditional Stats**: GP, TOI, G, A, P, P/60, Hits
+- **Edge Skating Stats** (with percentiles):
   - Top skating speed (mph)
   - Bursts over 20 mph and 22 mph
   - Distance skated per game (miles)
-  - Offensive/Defensive zone time percentages
-  - Zone start percentage
+- **Edge Shooting Stats** (with percentiles):
   - Top shot speed (mph)
-- **Interactive Table**: Click any column to sort
-- **Percentile Coloring**: Green for 75th+ percentile, red for below 25th
-- **Player Links**: Click any player name to view their Hockey-Reference page
+  - Shots per 60 minutes
+- **Deployment Stats**:
+  - Offensive zone time percentage
+  - Zone start percentage
+- **Goalie Stats**: W, L, OTL, SO, GAA, SV%, High-Danger SV%
+- **Interactive Table**: Click any column to sort ascending/descending
+- **Percentile Coloring**: Color gradient from red (low) to green (75th+) to pink (90th+)
+- **Expandable Info Panel**: "How to read this data" guide built into the UI
 - **Auto-refresh**: Data updates daily at 6 AM ET
 
 ## Quick Start
@@ -30,8 +38,8 @@ Chel Edge combines traditional NHL stats with NHL Edge tracking data in one sort
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/sean-m-sweeney/caps-edge.git
-   cd caps-edge
+   git clone https://github.com/sean-m-sweeney/nhl-edge-report.git
+   cd nhl-edge-report
    ```
 
 2. Create a `.env` file with your API key:
@@ -91,6 +99,12 @@ If no filters provided, returns all league players.
 ### `GET /api/players/{player_id}`
 Returns a single player with all stats.
 
+### `GET /api/goalies`
+Returns goalies with stats. Supports the same filtering parameters as `/api/players`.
+
+### `GET /api/goalies/{player_id}`
+Returns a single goalie with all stats.
+
 ### `GET /api/teams`
 Returns list of all NHL teams with divisions and conferences.
 
@@ -122,14 +136,14 @@ You can also trigger a manual refresh using the API endpoint.
 ## Tech Stack
 
 - **Backend**: Python 3.11, FastAPI, SQLite
-- **Frontend**: Vanilla HTML/CSS/JS with Tailwind CSS (CDN)
+- **Frontend**: Vanilla HTML/CSS/JS with Tailwind CSS (build-time compiled)
 - **Data Source**: NHL API via [nhl-api-py](https://github.com/coreyjs/nhl-api-py)
 - **Deployment**: Docker container for UNRAID
 
 ## Project Structure
 
 ```
-chel-edge/
+edge-report/
 ├── backend/
 │   ├── __init__.py
 │   ├── main.py           # FastAPI app and routes
@@ -139,12 +153,15 @@ chel-edge/
 ├── frontend/
 │   ├── index.html        # Main page
 │   ├── app.js            # Data fetching and table rendering
-│   └── styles.css        # Custom styles
+│   ├── styles.css        # Compiled Tailwind styles
+│   └── src/input.css     # Tailwind source
 ├── scripts/
 │   └── refresh.py        # Cron refresh script
 ├── data/                 # SQLite database (Docker volume)
 ├── Dockerfile
 ├── docker-compose.yml
+├── tailwind.config.js
+├── package.json
 ├── requirements.txt
 ├── crontab
 └── README.md
@@ -155,6 +172,7 @@ chel-edge/
 - [ ] League-wide leaderboard view for any stat
 - [ ] Player comparison tool (side-by-side)
 - [x] ~~Support for other NHL teams (team selector)~~ (v2.0)
+- [x] ~~Goalie stats support~~ (v2.0)
 - [ ] Historical season selector
 - [ ] Game-by-game breakdown for individual players
 - [ ] Playoff vs regular season toggle
@@ -173,7 +191,7 @@ Contributions welcome! Please open an issue first to discuss proposed changes.
 
 If you find this useful, consider buying me a coffee!
 
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/cheledge)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/edgereport)
 
 ## License
 

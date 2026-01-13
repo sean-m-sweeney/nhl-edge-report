@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  chel-edge:
+  edge-report:
     build: .
-    container_name: chel-edge
+    container_name: edge-report
     ports:
       - "8001:8000"
     volumes:
-      - chel-edge-data:/app/data
+      - edge-report-data:/app/data
     environment:
       - API_REFRESH_KEY=${API_REFRESH_KEY:-change-me-in-production}
       - TZ=America/New_York
@@ -21,5 +21,5 @@ services:
       start_period: 60s
 
 volumes:
-  chel-edge-data:
+  edge-report-data:
     driver: local

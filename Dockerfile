@@ -29,14 +29,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 COPY scripts/ ./scripts/
-COPY crontab /etc/cron.d/chel-edge-cron
+COPY crontab /etc/cron.d/edge-report-cron
 
 # Copy built CSS from builder stage (overwrites the source styles.css)
 COPY --from=css-builder /build/frontend/styles.css ./frontend/styles.css
 
 # Set up cron
-RUN chmod 0644 /etc/cron.d/chel-edge-cron && \
-    crontab /etc/cron.d/chel-edge-cron
+RUN chmod 0644 /etc/cron.d/edge-report-cron && \
+    crontab /etc/cron.d/edge-report-cron
 
 # Create data directory
 RUN mkdir -p /app/data

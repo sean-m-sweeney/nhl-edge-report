@@ -7,6 +7,6 @@ PYTHONPATH=/app
 DATA_DIR=/app/data
 
 # 6:00 AM ET (06:00)
-0 6 * * * root cd /app && python scripts/refresh.py >> /var/log/caps-edge-refresh.log 2>&1
+0 6 * * * root cd /app && python scripts/refresh.py >> /var/log/edge-report-refresh.log 2>&1
 
 # Empty line required at end of crontab

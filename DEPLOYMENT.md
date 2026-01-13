@@ -1,6 +1,6 @@
-# Caps Edge Deployment Guide
+# Edge Report Deployment Guide
 
-Complete instructions for deploying Caps Edge on UNRAID or any Docker-capable server.
+Complete instructions for deploying Edge Report on UNRAID or any Docker-capable server.
 
 ## Prerequisites
 
@@ -12,8 +12,8 @@ Complete instructions for deploying Caps Edge on UNRAID or any Docker-capable se
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/sean-m-sweeney/caps-edge.git
-cd caps-edge
+git clone https://github.com/sean-m-sweeney/nhl-edge-report.git
+cd nhl-edge-report
 
 # 2. Create environment file
 cat > .env << EOF
@@ -44,27 +44,27 @@ The first startup takes 2-3 minutes to fetch initial data from the NHL API.
 2. **Create the stack**:
    - Go to Docker > Compose
    - Click "Add New Stack"
-   - Name: `caps-edge`
+   - Name: `edge-report`
    - Paste the contents of `docker-compose.yml`
    - Add environment variables in the UI or create `.env` file
 
 3. **Set up the appdata path** (optional, for persistence):
    ```yaml
    volumes:
-     - /mnt/user/appdata/caps-edge:/app/data
+     - /mnt/user/appdata/edge-report:/app/data
    ```
 
 ### Option 2: Docker Run Command
 
 ```bash
 docker run -d \
-  --name caps-edge \
+  --name edge-report \
   --restart unless-stopped \
   -p 8000:8000 \
-  -v /mnt/user/appdata/caps-edge:/app/data \
+  -v /mnt/user/appdata/edge-report:/app/data \
   -e API_REFRESH_KEY=your-secret-key-here \
   -e TZ=America/New_York \
-  caps-edge:latest
+  edge-report:latest
 ```
 
 ## Environment Variables
@@ -106,7 +106,7 @@ In Cloudflare Zero Trust dashboard:
 3. Add a public hostname:
    - Subdomain: `capsedge` (or your choice)
    - Domain: `yourdomain.com`
-   - Service: `http://caps-edge:8000`
+   - Service: `http://edge-report:8000`
 
 ### 3. DNS Setup
 
@@ -121,7 +121,7 @@ Your app will be available at: `https://capsedge.yourdomain.com`
 1. Add a new Proxy Host:
    - Domain: `capsedge.yourdomain.com`
    - Scheme: `http`
-   - Forward Hostname: `caps-edge` (container name) or IP
+   - Forward Hostname: `edge-report` (container name) or IP
    - Forward Port: `8000`
    - Enable SSL (Let's Encrypt)
 
@@ -131,7 +131,7 @@ Add to docker-compose.yml:
 
 ```yaml
 services:
-  caps-edge:
+  edge-report:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.capsedge.rule=Host(`capsedge.yourdomain.com`)"
@@ -141,10 +141,8 @@ services:
 
 ## Data Refresh Schedule
 
-Data automatically refreshes via cron at:
-- **1:00 PM ET**
-- **7:00 PM ET**
-- **11:00 PM ET**
+Data automatically refreshes via cron once daily at:
+- **6:00 AM ET**
 
 ### Manual Refresh
 
@@ -161,9 +159,9 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:8000/api/refresh/sync
 ### View Refresh Logs
 
 ```bash
-docker logs caps-edge --tail 100
+docker logs edge-report --tail 100
 # Or
-docker exec caps-edge cat /var/log/caps-edge-refresh.log
+docker exec edge-report cat /var/log/edge-report-refresh.log
 ```
 
 ## Health Monitoring
@@ -188,13 +186,13 @@ Response:
 The container includes a built-in health check. View status:
 
 ```bash
-docker inspect caps-edge --format='{{.State.Health.Status}}'
+docker inspect edge-report --format='{{.State.Health.Status}}'
 ```
 
 ### Uptime Monitoring (Optional)
 
 Add to Uptime Kuma or similar:
-- URL: `http://caps-edge:8000/api/health`
+- URL: `http://edge-report:8000/api/health`
 - Expected: `"status":"healthy"`
 
 ## Backup & Restore
@@ -204,7 +202,7 @@ Add to Uptime Kuma or similar:
 ```bash
 # Stop container first for consistency
 docker-compose stop
-cp /mnt/user/appdata/caps-edge/caps_edge.db /mnt/user/backups/caps_edge_$(date +%Y%m%d).db
+cp /mnt/user/appdata/edge-report/caps_edge.db /mnt/user/backups/caps_edge_$(date +%Y%m%d).db
 docker-compose start
 ```
 
@@ -212,7 +210,7 @@ docker-compose start
 
 ```bash
 docker-compose stop
-cp /mnt/user/backups/caps_edge_YYYYMMDD.db /mnt/user/appdata/caps-edge/caps_edge.db
+cp /mnt/user/backups/caps_edge_YYYYMMDD.db /mnt/user/appdata/edge-report/caps_edge.db
 docker-compose start
 ```
 
@@ -221,7 +219,7 @@ docker-compose start
 ### Pull Latest Changes
 
 ```bash
-cd caps-edge
+cd edge-report
 git pull
 docker-compose build --no-cache
 docker-compose up -d
@@ -243,7 +241,7 @@ docker-compose up -d
 
 ```bash
 # Check logs
-docker logs caps-edge
+docker logs edge-report
 
 # Common issues:
 # - Port 8000 already in use: change port in docker-compose.yml
@@ -254,20 +252,20 @@ docker logs caps-edge
 
 ```bash
 # Check if database exists
-docker exec caps-edge ls -la /app/data/
+docker exec edge-report ls -la /app/data/
 
 # Trigger manual refresh
 curl -H "X-API-Key: YOUR_KEY" http://localhost:8000/api/refresh/sync
 
 # Check refresh logs
-docker logs caps-edge --tail 50
+docker logs edge-report --tail 50
 ```
 
 ### API Returns 500 Errors
 
 ```bash
 # Check container logs for Python errors
-docker logs caps-edge --tail 100 | grep -i error
+docker logs edge-report --tail 100 | grep -i error
 
 # Restart container
 docker-compose restart
@@ -277,10 +275,10 @@ docker-compose restart
 
 ```bash
 # Verify cron is running in container
-docker exec caps-edge service cron status
+docker exec edge-report service cron status
 
 # Check crontab is installed
-docker exec caps-edge crontab -l
+docker exec edge-report crontab -l
 ```
 
 ## Performance Tuning
@@ -291,7 +289,7 @@ Add to docker-compose.yml:
 
 ```yaml
 services:
-  caps-edge:
+  edge-report:
     deploy:
       resources:
         limits:
@@ -312,6 +310,5 @@ The SQLite database is small (~1MB) and doesn't require optimization for this us
 
 ## Support
 
-- Issues: https://github.com/sean-m-sweeney/caps-edge/issues
-- Reddit: r/caps
-- Ko-fi: https://ko-fi.com/capsedge
+- Issues: https://github.com/sean-m-sweeney/nhl-edge-report/issues
+- Ko-fi: https://ko-fi.com/edgereport
