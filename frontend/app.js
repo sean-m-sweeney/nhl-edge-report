@@ -593,11 +593,10 @@ function renderTeamSpeed() {
 
     teamSpeedDisplay.classList.remove('hidden');
     teamSpeedDisplay.innerHTML = `
-        <div class="flex items-center gap-6 text-xs">
+        <div class="flex flex-wrap items-center gap-4 md:gap-6 text-xs">
             <div class="flex items-center gap-2">
                 <span class="text-gray-500 uppercase tracking-wider">Team Speed</span>
                 <span class="font-mono text-neon-cyan font-bold">${teamSpeed.weighted_avg_speed} mph</span>
-                <span class="text-gray-600">(TOI-weighted avg)</span>
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-gray-500 uppercase tracking-wider">Bursts/Game</span>
@@ -609,8 +608,41 @@ function renderTeamSpeed() {
                     #${teamSpeed.rank}/${teamSpeed.total_teams}
                 </span>
             </div>
+            <button id="team-speed-info-toggle" class="ml-auto text-gray-500 hover:text-neon-cyan flex items-center gap-1 transition-colors">
+                <span class="text-neon-cyan">?</span>
+                <span>How is this calculated?</span>
+                <span id="team-speed-arrow" class="transition-transform">▼</span>
+            </button>
+        </div>
+        <div id="team-speed-info" class="hidden mt-3 pt-3 border-t border-grid-line text-xs text-gray-400">
+            <div class="grid md:grid-cols-3 gap-4">
+                <div>
+                    <h4 class="text-neon-cyan font-bold mb-1">Team Speed</h4>
+                    <p>TOI-weighted average of each player's top speed. Players with more ice time contribute more to the average, reflecting actual on-ice speed presence.</p>
+                </div>
+                <div>
+                    <h4 class="text-neon-pink font-bold mb-1">Bursts/Game</h4>
+                    <p>Total team bursts over 20 mph divided by total team games played. Shows how often the team generates explosive skating plays per game.</p>
+                </div>
+                <div>
+                    <h4 class="text-white font-bold mb-1">League Rank</h4>
+                    <p>Team's position among all 32 NHL teams, ranked by TOI-weighted average speed. Based on ${teamSpeed.player_count} skaters with 10+ games played.</p>
+                </div>
+            </div>
         </div>
     `;
+
+    // Add toggle handler
+    const toggle = document.getElementById('team-speed-info-toggle');
+    const info = document.getElementById('team-speed-info');
+    const arrow = document.getElementById('team-speed-arrow');
+
+    if (toggle && info && arrow) {
+        toggle.addEventListener('click', () => {
+            const isHidden = info.classList.toggle('hidden');
+            arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+        });
+    }
 }
 
 /**
