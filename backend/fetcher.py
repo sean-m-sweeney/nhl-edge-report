@@ -242,25 +242,18 @@ def fetch_all_league_goalies(client: NHLClient) -> list:
     logger.info("Fetching all league goalies...")
     season = get_current_season()
 
-    filters = [
-        SeasonQuery(season_start=season, season_end=season),
-        GameTypeQuery(game_type="2"),
-    ]
-
-    qb = QueryBuilder()
-    query_ctx = qb.build(filters=filters)
-
     try:
         # Paginate through all goalies
         all_goalies = []
         for start in range(0, 200, 100):
-            result = client.stats.goalie_stats_with_query_context(
-                query_context=query_ctx,
-                report_type="summary",
+            batch = client.stats.goalie_stats_summary(
+                start_season=season,
+                end_season=season,
+                stats_type="summary",
+                game_type_id=2,
                 limit=100,
                 start=start
             )
-            batch = result.get("data", [])
             if not batch:
                 break
             all_goalies.extend(batch)
