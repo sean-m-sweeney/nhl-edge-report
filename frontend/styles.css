@@ -57,13 +57,18 @@ tr.table-row:hover td.sticky {
     color: #22d3ee;
 }
 .pct-80 {
+    background-color: rgba(0, 243, 255, 0.15);
     color: #00f3ff;
-    text-shadow: 0 0 6px rgba(0, 243, 255, 0.5);
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+    box-shadow: inset 0 0 8px rgba(0, 243, 255, 0.2);
 }
 .pct-90 {
+    background-color: rgba(255, 0, 255, 0.2);
     color: #ff00ff;
     font-weight: bold;
-    text-shadow: 0 0 8px rgba(255, 0, 255, 0.6);
+    text-shadow: 0 0 10px rgba(255, 0, 255, 0.8);
+    box-shadow: inset 0 0 12px rgba(255, 0, 255, 0.3);
 }
 
 /* Legacy heatmap classes (keeping for compatibility) */
