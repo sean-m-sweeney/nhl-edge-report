@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/jpeg" href="logo.jpg">
     <link rel="apple-touch-icon" href="logo.jpg">
-    <title>Edge Report - NHL Edge Stats</title>
+    <title>NHL NHL Edge Report</title>
     <meta name="description" content="NHL Edge tracking stats for every fan. Advanced skating, shooting, and deployment metrics for all NHL players.">
-    <meta property="og:title" content="Edge Report - NHL Edge Stats">
+    <meta property="og:title" content="NHL NHL Edge Report">
     <meta property="og:description" content="Beyond the box score. Advanced NHL Edge tracking stats for every fan.">
     <!-- Tailwind CSS built at deploy time - no more CDN! -->
-    <link rel="stylesheet" href="styles.css?v=15">
+    <link rel="stylesheet" href="styles.css?v=17">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -19,9 +19,9 @@
     <header class="border-b-2 border-neon-cyan bg-void-light sticky top-0 z-50">
         <div class="max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <img src="logo.jpg?v=2" alt="Edge Report Logo" class="w-10 h-10 rounded border border-neon-cyan/50">
+                <img src="logo.jpg?v=2" alt="NHL Edge Report Logo" class="w-10 h-10 rounded border border-neon-cyan/50">
                 <h1 class="font-arcade text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan to-neon-pink drop-shadow-[0_0_5px_rgba(0,243,255,0.5)]">
-                    EDGE REPORT
+                    NHL EDGE REPORT
                 </h1>
             </div>
             <div class="flex items-center gap-4 text-xs">
@@ -33,7 +33,7 @@
 
     <!-- Hero Banner -->
     <div class="relative w-full h-32 md:h-48 overflow-hidden">
-        <img src="hero.png?v=1" alt="Edge Report Banner" class="w-full h-full object-cover">
+        <img src="hero.png?v=1" alt="NHL Edge Report Banner" class="w-full h-full object-cover">
         <div class="absolute inset-0 bg-gradient-to-t from-void via-transparent to-transparent"></div>
         <div class="absolute bottom-4 left-4 md:left-8">
             <p class="font-arcade text-xs md:text-sm text-neon-cyan drop-shadow-[0_0_10px_rgba(0,243,255,0.8)]">BEYOND THE BOX SCORE</p>
@@ -90,36 +90,46 @@
     <!-- Filter Bar -->
     <div class="bg-void border-b border-grid-line p-4">
         <div class="max-w-[1920px] mx-auto flex flex-wrap gap-4 items-center">
+            <!-- Primary: View Type (Teams vs Players) -->
             <div class="flex items-center gap-2">
-                <span class="text-[10px] uppercase tracking-widest text-gray-500">Scope</span>
-                <select id="filter-type" class="bg-void-light border border-gray-700 text-neon-cyan text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
-                    <option value="team">By Team</option>
-                    <option value="division">By Division</option>
-                    <option value="conference">By Conference</option>
-                    <option value="league">Full League</option>
+                <span class="text-[10px] uppercase tracking-widest text-gray-500">View</span>
+                <select id="view-type" class="select-with-caret bg-void-light border border-neon-cyan text-neon-cyan text-xs p-2 pr-6 rounded-none focus:border-neon-cyan focus:outline-none uppercase font-bold cursor-pointer">
+                    <option value="teams">Teams</option>
+                    <option value="players">Players</option>
                 </select>
             </div>
-            <select id="filter-team" class="bg-void-light border border-gray-700 text-white text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+            <!-- Scope Filter -->
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] uppercase tracking-widest text-gray-500">Scope</span>
+                <select id="filter-type" class="select-with-caret bg-void-light border border-gray-700 text-white text-xs p-2 pr-6 rounded-none focus:border-neon-cyan focus:outline-none uppercase cursor-pointer">
+                    <option value="league">Full League</option>
+                    <option value="division">By Division</option>
+                    <option value="conference">By Conference</option>
+                    <option value="team">By Team</option>
+                </select>
+            </div>
+            <select id="filter-team" class="hidden select-with-caret bg-void-light border border-gray-700 text-white text-xs p-2 pr-6 rounded-none focus:border-neon-cyan focus:outline-none uppercase cursor-pointer">
                 <option value="WSH">Washington Capitals</option>
             </select>
-            <select id="filter-division" class="hidden bg-void-light border border-gray-700 text-white text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+            <select id="filter-division" class="hidden select-with-caret bg-void-light border border-gray-700 text-white text-xs p-2 pr-6 rounded-none focus:border-neon-cyan focus:outline-none uppercase cursor-pointer">
                 <option value="Metropolitan">Metropolitan</option>
                 <option value="Atlantic">Atlantic</option>
                 <option value="Central">Central</option>
                 <option value="Pacific">Pacific</option>
             </select>
-            <select id="filter-conference" class="hidden bg-void-light border border-gray-700 text-white text-xs p-2 rounded-none focus:border-neon-cyan focus:outline-none uppercase">
+            <select id="filter-conference" class="hidden select-with-caret bg-void-light border border-gray-700 text-white text-xs p-2 pr-6 rounded-none focus:border-neon-cyan focus:outline-none uppercase cursor-pointer">
                 <option value="Eastern">Eastern Conf</option>
                 <option value="Western">Western Conf</option>
             </select>
-            <select id="position-toggle" class="bg-void-light border border-neon-green text-neon-green text-xs p-2 rounded-none focus:border-neon-green focus:outline-none uppercase cursor-pointer">
+            <!-- Player Type (only shown when Players view selected, comes LAST) -->
+            <select id="position-toggle" class="hidden select-with-caret bg-void-light border border-neon-green text-neon-green text-xs p-2 pr-6 rounded-none focus:border-neon-green focus:outline-none uppercase cursor-pointer">
                 <option value="forwards">Forwards</option>
                 <option value="defensemen">Defensemen</option>
                 <option value="goalies">Goalies</option>
             </select>
             <div class="ml-auto flex items-center gap-4 font-arcade text-[10px] text-gray-500">
                 <span id="position-count"></span>
-                <span>SKATERS: <span id="player-count" class="text-neon-pink">0</span></span>
+                <span id="skater-count-label">SKATERS: <span id="player-count" class="text-neon-pink">0</span></span>
             </div>
         </div>
     </div>
@@ -152,7 +162,8 @@
                                 <th class="p-3 whitespace-nowrap text-right text-gray-400 cursor-pointer hover:text-white" data-sort="assists" title="Assists">A</th>
                                 <th class="p-3 whitespace-nowrap text-right text-white font-bold cursor-pointer hover:text-neon-cyan" data-sort="points" title="Total Points">PTS</th>
                                 <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="p60" title="Points per 60 minutes of ice time">P/60</th>
-                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white border-r border-grid-line" data-sort="hits" title="Total Hits this season">HITS</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="hits" title="Total Hits this season">HITS</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white border-r border-grid-line" data-sort="blocks" title="Total Blocked Shots this season">BLKS</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="top_speed_mph" title="Top skating speed recorded this season (mph)">TOP MPH</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_20_plus" title="Number of skating bursts over 20 mph">BURST 20+</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_22_plus" title="Number of skating bursts over 22 mph (elite speed)">BURST 22+</th>
@@ -186,6 +197,32 @@
                             </tr>
                         </thead>
                         <tbody id="goalies-body" class="divide-y divide-grid-line"></tbody>
+                    </table>
+                </div>
+
+                <!-- Teams Table (default view) -->
+                <div id="teams-table-wrapper" class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-xs text-left border-collapse" id="teams-table">
+                        <thead class="sticky top-0 z-30 bg-void border-b-2 border-neon-cyan text-neon-cyan font-bold tracking-wider">
+                            <tr>
+                                <th class="p-3 sticky left-0 z-40 bg-void border-r border-grid-line min-w-[60px] cursor-pointer hover:text-white font-bold" data-sort="team_abbr" title="Team">TEAM</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white font-bold" data-sort="points" title="Points">PTS</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="wins" title="Wins">W</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="losses" title="Losses">L</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white border-r border-grid-line" data-sort="ot_losses" title="Overtime Losses">OTL</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="goals_for" title="Goals For">GF</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="goals_against" title="Goals Against">GA</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white border-r border-grid-line" data-sort="goal_diff" title="Goal Differential">DIFF</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-pink cursor-pointer hover:text-white" data-sort="pp_pct" title="Power Play Percentage">PP%</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-pink cursor-pointer hover:text-white border-r border-grid-line" data-sort="pk_pct" title="Penalty Kill Percentage">PK%</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="weighted_avg_speed" title="TOI-weighted team skating speed (mph)">SPEED (mph)</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="weighted_avg_shot_speed" title="TOI-weighted team shot speed (mph)">SHOT (mph)</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white border-r border-grid-line" data-sort="avg_bursts_per_game" title="Team bursts 20+ per game">BURST/G</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="total_hits" title="Total team hits this season">HITS</th>
+                                <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="total_blocks" title="Total team blocked shots this season">BLKS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teams-body" class="divide-y divide-grid-line"></tbody>
                     </table>
                 </div>
             </div>
@@ -240,6 +277,6 @@
         </div>
     </footer>
 
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=21"></script>
 </body>
 </html>

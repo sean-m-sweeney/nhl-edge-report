@@ -14,6 +14,7 @@ class PlayerStats(BaseModel):
     points: Optional[int] = None
     plus_minus: Optional[int] = None
     hits: Optional[int] = None
+    blocks: Optional[int] = None
     pim: Optional[int] = None
     faceoff_win_pct: Optional[float] = None
     shots: Optional[int] = None

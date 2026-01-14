@@ -8,10 +8,12 @@ let forwards = [];
 let defensemen = [];
 let goalies = [];
 let teams = [];
+let teamStats = [];  // For Teams view
 let teamSpeed = null;
-let currentView = 'forwards'; // 'forwards', 'defensemen', or 'goalies'
+let currentView = 'teams'; // 'teams', 'forwards', 'defensemen', or 'goalies'
 let sortState = { field: 'points', direction: 'desc' };
 let goalieSortState = { field: 'wins', direction: 'desc' };
+let teamsSortState = { field: 'points', direction: 'desc' };
 
 // Virtual scrolling config (disabled - causes UX issues)
 const VIRTUAL_SCROLL = {
@@ -20,7 +22,7 @@ const VIRTUAL_SCROLL = {
     enabled: false      // Disabled - clunky scroll-in-box UX
 };
 let filterState = {
-    type: 'team',
+    type: 'league',
     team: 'WSH',
     division: 'Metropolitan',
     conference: 'Eastern'
@@ -45,6 +47,10 @@ const goaliesBody = document.getElementById('goalies-body');
 const goalieTableWrapper = document.getElementById('goalie-table-wrapper');
 const skaterTableWrapper = document.getElementById('skater-table-wrapper');
 const teamSpeedDisplay = document.getElementById('team-speed-display');
+const teamsBody = document.getElementById('teams-body');
+const teamsTableWrapper = document.getElementById('teams-table-wrapper');
+const skaterCountLabel = document.getElementById('skater-count-label');
+const viewTypeEl = document.getElementById('view-type');
 
 /**
  * Format relative time (e.g., "2 hours ago")
@@ -125,7 +131,8 @@ function renderPlayerRow(player) {
             <td class="p-3 text-right font-mono text-gray-400">${formatStat(stats.assists)}</td>
             <td class="p-3 text-right font-mono text-white font-bold">${formatStat(stats.points)}</td>
             <td class="p-3 text-right font-mono ${getPercentileClass(stats.p60_percentile)}">${formatStat(stats.p60, 2)}</td>
-            <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">${formatStat(stats.hits)}</td>
+            <td class="p-3 text-right font-mono text-gray-400">${formatStat(stats.hits)}</td>
+            <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">${formatStat(stats.blocks)}</td>
             <td class="p-3 text-right font-mono ${getPercentileClass(edge.top_speed_percentile)}">
                 ${formatStat(edge.top_speed_mph, 1)}
             </td>
@@ -190,6 +197,51 @@ function renderGoalieRow(goalie) {
 }
 
 /**
+ * Get CSS class for goal differential (positive = green, negative = red)
+ */
+function getGoalDiffClass(diff) {
+    if (diff === null || diff === undefined) return 'text-gray-500';
+    if (diff > 0) return 'text-neon-green';
+    if (diff < 0) return 'text-red-400';
+    return 'text-gray-400';
+}
+
+/**
+ * Format goal differential with + sign for positive values
+ */
+function formatGoalDiff(diff) {
+    if (diff === null || diff === undefined) return '-';
+    return diff > 0 ? `+${diff}` : diff.toString();
+}
+
+/**
+ * Render a single team row
+ */
+function renderTeamRow(team) {
+    return `
+        <tr class="table-row group transition-colors cursor-pointer" data-team-abbr="${team.team_abbr}">
+            <td class="sticky left-0 z-30 bg-void border-r border-grid-line p-3 font-mono font-bold text-white group-hover:text-neon-cyan transition-colors">
+                ${team.team_abbr}
+            </td>
+            <td class="p-3 text-right font-mono text-white font-bold ${getPercentileClass(team.points_percentile)}">${formatStat(team.points)}</td>
+            <td class="p-3 text-right font-mono text-gray-300">${formatStat(team.wins)}</td>
+            <td class="p-3 text-right font-mono text-gray-400">${formatStat(team.losses)}</td>
+            <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">${formatStat(team.ot_losses)}</td>
+            <td class="p-3 text-right font-mono text-gray-300">${formatStat(team.goals_for)}</td>
+            <td class="p-3 text-right font-mono text-gray-400">${formatStat(team.goals_against)}</td>
+            <td class="p-3 text-right font-mono ${getGoalDiffClass(team.goal_diff)} border-r border-grid-line">${formatGoalDiff(team.goal_diff)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.pp_percentile)}">${team.pp_pct ? formatStat(team.pp_pct, 1) + '%' : '-'}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.pk_percentile)} border-r border-grid-line">${team.pk_pct ? formatStat(team.pk_pct, 1) + '%' : '-'}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.speed_percentile)}">${formatStat(team.weighted_avg_speed, 2)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.shot_speed_percentile)}">${formatStat(team.weighted_avg_shot_speed, 1)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.bursts_percentile)} border-r border-grid-line">${formatStat(team.avg_bursts_per_game, 2)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.hits_percentile)}">${formatStat(team.total_hits)}</td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(team.blocks_percentile)}">${formatStat(team.total_blocks)}</td>
+        </tr>
+    `;
+}
+
+/**
  * Get nested value from object using dot notation
  */
 function getNestedValue(obj, path) {
@@ -218,6 +270,7 @@ function sortPlayersArray(playersArray, field, direction) {
         'points': 'stats.points',
         'p60': 'stats.p60',
         'hits': 'stats.hits',
+        'blocks': 'stats.blocks',
         'shots_per_60': 'stats.shots_per_60',
         'top_speed_mph': 'edge_stats.top_speed_mph',
         'bursts_20_plus': 'edge_stats.bursts_20_plus',
@@ -254,7 +307,16 @@ function sortPlayersArray(playersArray, field, direction) {
  * Sort the current table
  */
 function sortTable(field) {
-    if (currentView === 'goalies') {
+    if (currentView === 'teams') {
+        // Teams sorting
+        if (teamsSortState.field === field) {
+            teamsSortState.direction = teamsSortState.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            teamsSortState.field = field;
+            teamsSortState.direction = field === 'team_name' ? 'asc' : 'desc';
+        }
+        sortTeamsArray(teamStats, field, teamsSortState.direction);
+    } else if (currentView === 'goalies') {
         // Goalie sorting
         if (goalieSortState.field === field) {
             goalieSortState.direction = goalieSortState.direction === 'asc' ? 'desc' : 'asc';
@@ -325,13 +387,46 @@ function sortGoaliesArray(goaliesArray, field, direction) {
 }
 
 /**
+ * Sort teams array by field
+ */
+function sortTeamsArray(teamsArray, field, direction) {
+    teamsArray.sort((a, b) => {
+        let aVal = a[field];
+        let bVal = b[field];
+
+        // Handle nulls - push to end
+        if (aVal === null || aVal === undefined) return 1;
+        if (bVal === null || bVal === undefined) return -1;
+
+        // String comparison for team_name
+        if (typeof aVal === 'string') {
+            const comparison = aVal.localeCompare(bVal);
+            return direction === 'asc' ? comparison : -comparison;
+        }
+
+        // Numeric comparison
+        const comparison = aVal - bVal;
+        return direction === 'asc' ? comparison : -comparison;
+    });
+}
+
+/**
  * Update sort indicator arrows in headers
  */
 function updateSortIndicators() {
-    // Remove all existing indicators from both tables
+    // Remove all existing indicators from all tables
     document.querySelectorAll('.sort-indicator').forEach(el => el.remove());
 
-    if (currentView === 'goalies') {
+    if (currentView === 'teams') {
+        const table = document.getElementById('teams-table');
+        const header = table.querySelector(`th[data-sort="${teamsSortState.field}"]`);
+        if (header) {
+            const indicator = document.createElement('span');
+            indicator.className = 'sort-indicator ml-1 text-neon-pink';
+            indicator.textContent = teamsSortState.direction === 'asc' ? '▲' : '▼';
+            header.appendChild(indicator);
+        }
+    } else if (currentView === 'goalies') {
         const table = document.getElementById('goalies-table');
         const header = table.querySelector(`th[data-sort="${goalieSortState.field}"]`);
         if (header) {
@@ -415,21 +510,34 @@ function renderVisibleRows(scrollTop = 0) {
  * Render the current table
  */
 function renderTable() {
-    if (currentView === 'goalies') {
-        // Show goalie table, hide skater table
+    if (currentView === 'teams') {
+        // Show teams table, hide skater and goalie tables
+        teamsTableWrapper.classList.remove('hidden');
+        skaterTableWrapper.classList.add('hidden');
+        goalieTableWrapper.classList.add('hidden');
+        positionCountEl.textContent = `${teamStats.length} teams`;
+        // Hide team speed display in teams view
+        if (teamSpeedDisplay) teamSpeedDisplay.classList.add('hidden');
+        // Render teams
+        teamsBody.innerHTML = teamStats.map(renderTeamRow).join('');
+    } else if (currentView === 'goalies') {
+        // Show goalie table, hide teams and skater tables
+        teamsTableWrapper.classList.add('hidden');
         skaterTableWrapper.classList.add('hidden');
         goalieTableWrapper.classList.remove('hidden');
         positionCountEl.textContent = `${goalies.length} goalies`;
+        // Render with virtual scrolling
+        renderVisibleRows(0);
     } else {
-        // Show skater table, hide goalie table
+        // Show skater table, hide teams and goalie tables
+        teamsTableWrapper.classList.add('hidden');
         skaterTableWrapper.classList.remove('hidden');
         goalieTableWrapper.classList.add('hidden');
         const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
         positionCountEl.textContent = `${currentPlayers.length} ${currentView === 'forwards' ? 'forwards' : 'defensemen'}`;
+        // Render with virtual scrolling
+        renderVisibleRows(0);
     }
-
-    // Render with virtual scrolling
-    renderVisibleRows(0);
 }
 
 /**
@@ -453,9 +561,17 @@ function setupVirtualScroll() {
 }
 
 /**
- * Setup sort click handlers for both skater and goalie tables
+ * Setup sort click handlers for all tables
  */
 function setupSortHandlers() {
+    // Teams table sort handlers
+    document.querySelectorAll('#teams-table th[data-sort]').forEach(header => {
+        header.addEventListener('click', () => {
+            const field = header.dataset.sort;
+            sortTable(field);
+        });
+    });
+
     // Skater table sort handlers
     document.querySelectorAll('#players-table th[data-sort]').forEach(header => {
         header.addEventListener('click', () => {
@@ -474,6 +590,46 @@ function setupSortHandlers() {
 }
 
 /**
+ * Setup team row click handler for drill-down
+ */
+function setupTeamClickHandler() {
+    if (teamsBody) {
+        teamsBody.addEventListener('click', async (e) => {
+            const row = e.target.closest('tr[data-team-abbr]');
+            if (!row) return;
+
+            const teamAbbr = row.dataset.teamAbbr;
+
+            // Update filter state to this team
+            filterState.type = 'team';
+            filterState.team = teamAbbr;
+
+            // Update filter dropdowns
+            filterTypeEl.value = 'team';
+            filterTeamEl.value = teamAbbr;
+            updateFilterDropdowns();
+
+            // Switch view type to Players
+            if (viewTypeEl) {
+                viewTypeEl.value = 'players';
+            }
+
+            // Show position toggle and switch to forwards view
+            positionToggle.classList.remove('hidden');
+            currentView = 'forwards';
+            positionToggle.value = 'forwards';
+
+            // Clear existing data and fetch new
+            forwards.length = 0;
+            defensemen.length = 0;
+            goalies.length = 0;
+
+            await fetchPlayers();
+        });
+    }
+}
+
+/**
  * Setup info section toggle
  */
 function setupInfoToggle() {
@@ -486,7 +642,70 @@ function setupInfoToggle() {
 }
 
 /**
- * Setup position toggle
+ * Setup view type toggle (Teams vs Players)
+ */
+function setupViewTypeToggle() {
+    console.log('setupViewTypeToggle called. viewTypeEl =', viewTypeEl);
+    if (viewTypeEl) {
+        console.log('Adding change event listener to viewTypeEl');
+        viewTypeEl.addEventListener('change', async () => {
+            console.log('VIEW DROPDOWN CHANGED! Value:', viewTypeEl.value);
+            const viewType = viewTypeEl.value;
+
+            if (viewType === 'teams') {
+                // Switch to teams view
+                currentView = 'teams';
+                positionToggle.classList.add('hidden');
+
+                // Update filter dropdowns (hides "By Team" option)
+                updateFilterDropdowns();
+
+                if (teamStats.length === 0) {
+                    await fetchTeamStats();
+                } else {
+                    renderTable();
+                    updateSortIndicators();
+                }
+            } else {
+                // DEBUG: Change page title to verify this code runs
+                document.title = 'DEBUG: Players view activated';
+                console.log('=== SWITCHING TO PLAYERS VIEW ===');
+
+                // Switch to players view - show position toggle
+                positionToggle.classList.remove('hidden');
+                currentView = positionToggle.value || 'forwards';
+
+                // Default to "Full League" for players view
+                filterState.type = 'league';
+                filterTypeEl.value = 'league';
+
+                // Explicitly hide team dropdown with BOTH methods
+                filterTeamEl.classList.add('hidden');
+                filterTeamEl.style.display = 'none';
+                filterTeamEl.style.visibility = 'hidden';
+                console.log('Team dropdown hidden. classList:', filterTeamEl.classList, 'display:', filterTeamEl.style.display);
+
+                // Update filter dropdowns
+                updateFilterDropdowns();
+
+                // Hide team speed display for full league view
+                teamSpeedDisplay.classList.add('hidden');
+                teamSpeedDisplay.innerHTML = '';
+
+                // Clear and refetch ALL players (no team filter)
+                forwards.length = 0;
+                defensemen.length = 0;
+                goalies.length = 0;
+                console.log('About to fetch players with filterState:', JSON.stringify(filterState));
+                await fetchPlayers();
+                console.log('Players fetched. Total forwards:', forwards.length);
+            }
+        });
+    }
+}
+
+/**
+ * Setup position toggle (Forwards/Defensemen/Goalies)
  */
 function setupPositionToggle() {
     if (positionToggle) {
@@ -494,16 +713,25 @@ function setupPositionToggle() {
             currentView = positionToggle.value;
 
             if (currentView === 'goalies') {
-                // Fetch goalies if not loaded or team changed
+                // Fetch goalies if not loaded
                 if (goalies.length === 0) {
                     await fetchGoalies();
                 }
                 goalieSortState = { field: 'wins', direction: 'desc' };
                 sortGoaliesArray(goalies, 'wins', 'desc');
             } else {
+                // Forwards or defensemen - fetch players if needed
+                if (forwards.length === 0 && defensemen.length === 0) {
+                    await fetchPlayers();
+                }
                 sortState = { field: 'points', direction: 'desc' };
                 const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
                 sortPlayersArray(currentPlayers, 'points', 'desc');
+            }
+
+            // Re-show team speed if viewing a specific team
+            if (filterState.type === 'team') {
+                renderTeamSpeed();
             }
 
             renderTable();
@@ -657,6 +885,65 @@ async function fetchGoalies() {
 }
 
 /**
+ * Build API URL for team stats with current filters
+ */
+function buildTeamStatsUrl() {
+    let url = '/api/team-stats';
+    const params = new URLSearchParams();
+
+    switch (filterState.type) {
+        case 'division':
+            params.set('division', filterState.division);
+            break;
+        case 'conference':
+            params.set('conference', filterState.conference);
+            break;
+        // 'team' and 'league' don't filter team stats - show all
+    }
+
+    const queryString = params.toString();
+    return queryString ? `${url}?${queryString}` : url;
+}
+
+/**
+ * Fetch team stats data from API
+ */
+async function fetchTeamStats() {
+    try {
+        const url = buildTeamStatsUrl();
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch team stats');
+
+        const data = await response.json();
+        teamStats = data.teams || [];
+
+        // Update last updated
+        if (data.last_updated) {
+            lastUpdatedEl.textContent = formatRelativeTime(data.last_updated);
+        }
+
+        // Sort by points by default
+        sortTeamsArray(teamStats, 'points', 'desc');
+
+        // Update count display
+        positionCountEl.textContent = `${teamStats.length} teams`;
+
+        // Render and update
+        renderTable();
+        updateSortIndicators();
+
+        // Show table, hide loading
+        loadingEl.classList.add('hidden');
+        tableContainer.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('Error fetching team stats:', error);
+        teamStats = [];
+        loadingEl.innerHTML = '<div class="text-red-500 font-arcade text-xs">ERROR LOADING DATA</div>';
+    }
+}
+
+/**
  * Fetch team speed stats
  */
 async function fetchTeamSpeed(teamAbbr) {
@@ -787,14 +1074,66 @@ async function fetchTeams() {
  * Update filter dropdown visibility
  */
 function updateFilterDropdowns() {
+    // Hide all filter dropdowns - use both class and style for reliability
     filterTeamEl.classList.add('hidden');
+    filterTeamEl.style.display = 'none';
     filterDivisionEl.classList.add('hidden');
+    filterDivisionEl.style.display = 'none';
     filterConferenceEl.classList.add('hidden');
+    filterConferenceEl.style.display = 'none';
+
+    // Hide "By Team" option in Teams view (it doesn't make sense there)
+    // Note: CSS hidden doesn't work on <option> elements, so we remove/add it
+    const teamOption = filterTypeEl.querySelector('option[value="team"]');
+    if (currentView === 'teams') {
+        // Remove "By Team" option if it exists
+        if (teamOption) {
+            teamOption.remove();
+        }
+        // If currently on 'team', switch to 'league'
+        if (filterState.type === 'team') {
+            filterState.type = 'league';
+            filterTypeEl.value = 'league';
+        }
+    } else {
+        // Add "By Team" option back if it doesn't exist
+        if (!teamOption) {
+            const newOption = document.createElement('option');
+            newOption.value = 'team';
+            newOption.textContent = 'By Team';
+            filterTypeEl.appendChild(newOption);
+        }
+    }
 
     switch (filterState.type) {
-        case 'team': filterTeamEl.classList.remove('hidden'); break;
-        case 'division': filterDivisionEl.classList.remove('hidden'); break;
-        case 'conference': filterConferenceEl.classList.remove('hidden'); break;
+        case 'team':
+            filterTeamEl.classList.remove('hidden');
+            filterTeamEl.style.display = '';
+            filterTeamEl.style.visibility = '';
+            break;
+        case 'division':
+            filterDivisionEl.classList.remove('hidden');
+            filterDivisionEl.style.display = '';
+            break;
+        case 'conference':
+            filterConferenceEl.classList.remove('hidden');
+            filterConferenceEl.style.display = '';
+            break;
+    }
+}
+
+/**
+ * Fetch data based on current view
+ */
+async function fetchCurrentViewData() {
+    if (currentView === 'teams') {
+        await fetchTeamStats();
+    } else {
+        // Clear existing player/goalie data
+        forwards.length = 0;
+        defensemen.length = 0;
+        goalies.length = 0;
+        await fetchPlayers();
     }
 }
 
@@ -804,23 +1143,44 @@ function updateFilterDropdowns() {
 function setupFilterHandlers() {
     filterTypeEl.addEventListener('change', () => {
         filterState.type = filterTypeEl.value;
+
+        // When switching to team filter, ensure team value is set from dropdown
+        if (filterState.type === 'team' && !filterState.team) {
+            filterState.team = filterTeamEl.value || 'WSH';
+        }
+
         updateFilterDropdowns();
-        fetchPlayers();
+        fetchCurrentViewData();
     });
 
     filterTeamEl.addEventListener('change', () => {
         filterState.team = filterTeamEl.value;
-        fetchPlayers();
+        // If in teams view and selecting a specific team, drill down to players
+        if (currentView === 'teams') {
+            // Switch to players/forwards view
+            currentView = 'forwards';
+            if (viewTypeEl) viewTypeEl.value = 'players';
+            positionToggle.classList.remove('hidden');
+            positionToggle.value = 'forwards';
+            updateFilterDropdowns();
+            forwards.length = 0;
+            defensemen.length = 0;
+            goalies.length = 0;
+            fetchPlayers();
+            renderTeamSpeed();
+        } else {
+            fetchCurrentViewData();
+        }
     });
 
     filterDivisionEl.addEventListener('change', () => {
         filterState.division = filterDivisionEl.value;
-        fetchPlayers();
+        fetchCurrentViewData();
     });
 
     filterConferenceEl.addEventListener('change', () => {
         filterState.conference = filterConferenceEl.value;
-        fetchPlayers();
+        fetchCurrentViewData();
     });
 }
 
@@ -828,15 +1188,29 @@ function setupFilterHandlers() {
  * Initialize the app
  */
 async function init() {
+    console.log('=== INIT STARTED ===');
     setupSortHandlers();
     setupInfoToggle();
+    setupViewTypeToggle();
     setupPositionToggle();
     setupFilterHandlers();
     setupVirtualScroll();
+    setupTeamClickHandler();
     updateFilterDropdowns();
 
+    // Hide position toggle by default (Teams view is default)
+    if (positionToggle) {
+        positionToggle.classList.add('hidden');
+    }
+
     await fetchTeams();
-    await fetchPlayers();
+
+    // Default to teams view
+    if (currentView === 'teams') {
+        await fetchTeamStats();
+    } else {
+        await fetchPlayers();
+    }
 }
 
 // Start the app

@@ -40,6 +40,7 @@ def db_row_to_player(row: dict) -> Player:
             points=row.get("points"),
             plus_minus=row.get("plus_minus"),
             hits=row.get("hits"),
+            blocks=row.get("blocks"),
             pim=row.get("pim"),
             faceoff_win_pct=round(row["faceoff_win_pct"] * 100, 1) if row.get("faceoff_win_pct") else None,
             shots=row.get("shots"),
@@ -276,6 +277,69 @@ async def get_all_team_speeds():
     return {
         "teams": all_teams,
         "count": len(all_teams)
+    }
+
+
+@app.get("/api/team-stats")
+async def get_team_stats(
+    division: Optional[str] = Query(None, description="Division name (Metropolitan, Atlantic, Central, Pacific)"),
+    conference: Optional[str] = Query(None, description="Conference name (Eastern, Western)")
+):
+    """
+    Get all teams with full stats for the Teams view.
+
+    Optional filters:
+    - division: Filter by division (Metropolitan, Atlantic, Central, Pacific)
+    - conference: Filter by conference (Eastern, Western)
+
+    If no filters provided, returns all 32 teams.
+    """
+    rows = database.get_all_team_stats(
+        division=division,
+        conference=conference
+    )
+
+    # Format team data for frontend
+    teams = []
+    for row in rows:
+        team = {
+            "team_abbr": row.get("team_abbr"),
+            "team_name": row.get("team_name"),
+            "division": row.get("division"),
+            "conference": row.get("conference"),
+            "games_played": row.get("games_played"),
+            "wins": row.get("wins"),
+            "losses": row.get("losses"),
+            "ot_losses": row.get("ot_losses"),
+            "points": row.get("points"),
+            "goals_for": row.get("goals_for"),
+            "goals_against": row.get("goals_against"),
+            "goal_diff": row.get("goal_diff"),
+            "pp_pct": row.get("pp_pct"),
+            "pk_pct": row.get("pk_pct"),
+            "weighted_avg_speed": row.get("weighted_avg_speed"),
+            "weighted_avg_shot_speed": row.get("weighted_avg_shot_speed"),
+            "avg_bursts_per_game": row.get("avg_bursts_per_game"),
+            "total_hits": row.get("total_hits"),
+            "total_blocks": row.get("total_blocks"),
+            "points_percentile": row.get("points_percentile"),
+            "goal_diff_percentile": row.get("goal_diff_percentile"),
+            "pp_percentile": row.get("pp_percentile"),
+            "pk_percentile": row.get("pk_percentile"),
+            "speed_percentile": row.get("speed_percentile"),
+            "shot_speed_percentile": row.get("shot_speed_percentile"),
+            "bursts_percentile": row.get("bursts_percentile"),
+            "hits_percentile": row.get("hits_percentile"),
+            "blocks_percentile": row.get("blocks_percentile"),
+        }
+        teams.append(team)
+
+    last_updated = database.get_last_updated()
+
+    return {
+        "teams": teams,
+        "last_updated": last_updated.isoformat() if last_updated else None,
+        "count": len(teams)
     }
 
 
