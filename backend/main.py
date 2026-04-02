@@ -1,10 +1,14 @@
 """FastAPI application for Edge Report."""
 
 import os
+import hmac
+import asyncio
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pathlib import Path
 
 from backend import database
@@ -18,14 +22,40 @@ from backend.fetcher import refresh_data
 # API key for protected endpoints
 API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "dev-key-change-me")
 
+# Lock to prevent concurrent data refreshes
+_refresh_lock = asyncio.Lock()
+
 app = FastAPI(
     title="Edge Report API",
     description="NHL Edge stats in a comprehensive, sortable format",
     version="2.0.0"
 )
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://edgereport.io",
+        "https://www.edgereport.io",
+    ],
+    allow_methods=["GET"],
+    allow_headers=["X-API-Key"],
+)
+
 # Static files path
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = (Path(__file__).parent.parent / "frontend").resolve()
 
 
 def db_row_to_player(row: dict) -> Player:
@@ -362,11 +392,21 @@ async def trigger_refresh(
     x_api_key: str = Header(None)
 ):
     """Trigger a manual data refresh. Protected by API key."""
-    if x_api_key != API_REFRESH_KEY:
+    if not hmac.compare_digest(x_api_key or "", API_REFRESH_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # Run refresh in background
-    background_tasks.add_task(refresh_data)
+    if _refresh_lock.locked():
+        return RefreshResponse(
+            status="already_running",
+            message="A data refresh is already in progress",
+            players_updated=0
+        )
+
+    async def locked_refresh():
+        async with _refresh_lock:
+            refresh_data()
+
+    background_tasks.add_task(locked_refresh)
 
     return RefreshResponse(
         status="started",
@@ -378,10 +418,18 @@ async def trigger_refresh(
 @app.get("/api/refresh/sync", response_model=RefreshResponse)
 async def trigger_refresh_sync(x_api_key: str = Header(None)):
     """Trigger a synchronous data refresh. Protected by API key."""
-    if x_api_key != API_REFRESH_KEY:
+    if not hmac.compare_digest(x_api_key or "", API_REFRESH_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    players_updated = refresh_data()
+    if _refresh_lock.locked():
+        return RefreshResponse(
+            status="already_running",
+            message="A data refresh is already in progress",
+            players_updated=0
+        )
+
+    async with _refresh_lock:
+        players_updated = refresh_data()
 
     return RefreshResponse(
         status="completed",
@@ -407,7 +455,11 @@ async def serve_static(filename: str):
     if filename.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found")
 
-    file_path = FRONTEND_DIR / filename
+    # Resolve and validate path to prevent directory traversal
+    file_path = (FRONTEND_DIR / filename).resolve()
+    if not str(file_path).startswith(str(FRONTEND_DIR)):
+        raise HTTPException(status_code=404, detail="Not found")
+
     if file_path.exists() and file_path.is_file():
         return FileResponse(file_path)
 
