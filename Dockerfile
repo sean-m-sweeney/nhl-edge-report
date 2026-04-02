@@ -1,5 +1,5 @@
 # Stage 1: Build Tailwind CSS
-FROM node:20-slim AS css-builder
+FROM node:22-slim AS css-builder
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ COPY frontend/ ./frontend/
 RUN npm run build:css
 
 # Stage 2: Python application
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
