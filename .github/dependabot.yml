@@ -10,6 +10,10 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    groups:
+      python-deps:
+        patterns:
+          - "*"
 
   # npm dependencies (package.json)
   - package-ecosystem: "npm"

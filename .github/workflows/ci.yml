@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -c "import ast; ast.parse(open('backend/main.py').read()); ast.parse(open('backend/database.py').read()); ast.parse(open('backend/fetcher.py').read()); print('All OK')"
+
+      - name: Import check
+        run: python -c "from backend import database; print('database OK')"
+
+      - name: Build Docker image
+        run: docker build -t edge-report:test .
