@@ -10,7 +10,7 @@
     <meta property="og:title" content="NHL Edge Report">
     <meta property="og:description" content="Beyond the box score. Advanced NHL Edge tracking stats for every fan.">
     <!-- Tailwind CSS built at deploy time - no more CDN! -->
-    <link rel="stylesheet" href="styles.css?v=17">
+    <link rel="stylesheet" href="styles.css?v=18">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -40,16 +40,16 @@
         </div>
     </div>
 
-    <!-- Info Section -->
+    <!-- Info Section (defaults to open) -->
     <div class="bg-void-light border-b border-grid-line">
         <div class="max-w-[1920px] mx-auto">
             <button id="info-toggle" class="w-full px-4 py-3 text-left text-xs text-gray-400 hover:text-neon-cyan flex items-center gap-2 transition-colors">
                 <span class="text-neon-cyan">?</span>
                 <span>How to read this data</span>
-                <span id="info-arrow" class="ml-auto transition-transform">▼</span>
+                <span id="info-arrow" class="ml-auto transition-transform rotate-180">▼</span>
             </button>
-            <div id="info-content" class="hidden px-4 pb-4">
-                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            <div id="info-content" class="px-4 pb-4">
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
                     <div class="bg-void p-3 border border-grid-line">
                         <h3 class="text-neon-cyan font-bold mb-2">TRADITIONAL STATS</h3>
                         <ul class="space-y-1 text-gray-400">
@@ -58,30 +58,50 @@
                             <li><span class="text-white">G / A / PTS</span> — Goals / Assists / Points</li>
                             <li><span class="text-white">P/60</span> — Points per 60 minutes of ice time</li>
                             <li><span class="text-white">HITS</span> — Total hits this season</li>
+                            <li><span class="text-white">BLKS</span> — Total blocked shots this season</li>
                         </ul>
                     </div>
                     <div class="bg-void p-3 border border-grid-line">
                         <h3 class="text-neon-green font-bold mb-2">SKATING (NHL EDGE)</h3>
                         <ul class="space-y-1 text-gray-400">
-                            <li><span class="text-white">TOP MPH</span> — Fastest speed recorded</li>
-                            <li><span class="text-white">BURST 20+</span> — Sprints over 20 mph</li>
-                            <li><span class="text-white">BURST 22+</span> — Sprints over 22 mph</li>
-                            <li><span class="text-white">DIST/G</span> — Miles skated per game</li>
+                            <li><span class="text-white">TOP MPH</span> — Fastest skating speed recorded this season</li>
+                            <li><span class="text-white">BURST 20+</span> — Total skating bursts over 20 mph</li>
+                            <li><span class="text-white">BURST 22+</span> — Total skating bursts over 22 mph (elite speed)</li>
+                            <li><span class="text-white">DIST/G</span> — Average distance skated per game (miles)</li>
                         </ul>
                     </div>
                     <div class="bg-void p-3 border border-grid-line">
-                        <h3 class="text-neon-pink font-bold mb-2">SHOOTING & DEPLOYMENT</h3>
+                        <h3 class="text-neon-pink font-bold mb-2">SHOOTING</h3>
                         <ul class="space-y-1 text-gray-400">
-                            <li><span class="text-white">SLAP MPH</span> — Hardest shot recorded</li>
-                            <li><span class="text-white">S/60</span> — Shots per 60 min of ice time</li>
-                            <li><span class="text-white">OZ%</span> — % of 5v5 time in offensive zone</li>
-                            <li><span class="text-white">ZS%</span> — Offensive zone start % (deployment)</li>
+                            <li><span class="text-white">SLAP MPH</span> — Hardest shot recorded this season (mph)</li>
+                            <li><span class="text-white">S/60</span> — Shot attempts per 60 min of ice time</li>
+                        </ul>
+                    </div>
+                    <div class="bg-void p-3 border border-grid-line">
+                        <h3 class="font-bold mb-2 text-gray-300">DEPLOYMENT</h3>
+                        <ul class="space-y-1 text-gray-400">
+                            <li><span class="text-white">FO%</span> — Faceoff win percentage (centers primarily)</li>
+                            <li><span class="text-white">OZ%</span> — % of 5v5 ice time spent in offensive zone</li>
+                            <li><span class="text-white">ZS%</span> — Offensive zone faceoff start % (higher = more sheltered)</li>
                         </ul>
                     </div>
                 </div>
-                <div class="mt-3 text-[10px] text-gray-500">
-                    <span class="text-neon-green">● Green highlighting</span> = 75th+ percentile league-wide &nbsp;|&nbsp;
-                    <span class="text-neon-pink">● Pink highlighting</span> = 90th+ percentile (elite)
+                <div class="mt-3 p-3 bg-void border border-grid-line text-xs">
+                    <h3 class="font-bold mb-2 text-gray-300">PERCENTILE HIGHLIGHTING</h3>
+                    <p class="text-gray-400 mb-2">Stats with percentile data are color-coded based on league-wide ranking among all skaters with 10+ games played. Click any column header to sort.</p>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <span class="pct-10 px-2 py-0.5 rounded text-[10px] font-mono">1-19th</span>
+                        <span class="pct-20 px-2 py-0.5 rounded text-[10px] font-mono">20-29th</span>
+                        <span class="pct-30 px-2 py-0.5 rounded text-[10px] font-mono">30-39th</span>
+                        <span class="pct-40 px-2 py-0.5 rounded text-[10px] font-mono">40-49th</span>
+                        <span class="pct-50 px-2 py-0.5 rounded text-[10px] font-mono">50-59th</span>
+                        <span class="pct-60 px-2 py-0.5 rounded text-[10px] font-mono">60-69th</span>
+                        <span class="pct-70 px-2 py-0.5 rounded text-[10px] font-mono">70-79th</span>
+                        <span class="pct-80 px-2 py-0.5 rounded text-[10px] font-mono">80-89th</span>
+                        <span class="pct-90 px-2 py-0.5 rounded text-[10px] font-mono">90-100th</span>
+                        <span class="text-gray-600 px-2 py-0.5 text-[10px]">No data = gray</span>
+                    </div>
+                    <p class="text-gray-500 mt-2 text-[10px]">Stats without percentile highlighting (GP, TOI, G, A, PTS, HITS, BLKS, S/60, FO%) are raw counting or rate stats shown without league comparison.</p>
                 </div>
             </div>
         </div>
@@ -278,6 +298,6 @@
         </div>
     </footer>
 
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
 </body>
 </html>
