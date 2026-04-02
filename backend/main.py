@@ -2,7 +2,7 @@
 
 import os
 import hmac
-import asyncio
+import threading
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +26,7 @@ if not API_REFRESH_KEY:
     logging.warning("API_REFRESH_KEY not set - refresh endpoints will reject all requests")
 
 # Lock to prevent concurrent data refreshes
-_refresh_lock = asyncio.Lock()
+_refresh_lock = threading.Lock()
 
 app = FastAPI(
     title="Edge Report API",
@@ -378,16 +378,18 @@ async def trigger_refresh(
     if not hmac.compare_digest(x_api_key or "", API_REFRESH_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    if _refresh_lock.locked():
+    if not _refresh_lock.acquire(blocking=False):
         return RefreshResponse(
             status="already_running",
             message="A data refresh is already in progress",
             players_updated=0
         )
 
-    async def locked_refresh():
-        async with _refresh_lock:
+    def locked_refresh():
+        try:
             refresh_data()
+        finally:
+            _refresh_lock.release()
 
     background_tasks.add_task(locked_refresh)
 
@@ -404,15 +406,17 @@ async def trigger_refresh_sync(x_api_key: str = Header(None)):
     if not hmac.compare_digest(x_api_key or "", API_REFRESH_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    if _refresh_lock.locked():
+    if not _refresh_lock.acquire(blocking=False):
         return RefreshResponse(
             status="already_running",
             message="A data refresh is already in progress",
             players_updated=0
         )
 
-    async with _refresh_lock:
+    try:
         players_updated = refresh_data()
+    finally:
+        _refresh_lock.release()
 
     return RefreshResponse(
         status="completed",

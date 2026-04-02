@@ -599,11 +599,12 @@ async def async_fetch_edge_stats(client: httpx.AsyncClient, player_id: int) -> O
 
     Makes 3 parallel API calls for a single player's Edge data.
     """
-    # Build URLs for the 3 Edge endpoints (using correct NHL API paths)
+    # Build URLs for the 3 Edge endpoints (season/game-type format)
     base_url = "https://api-web.nhle.com/v1"
-    detail_url = f"{base_url}/edge/skater-detail/{player_id}/season"
-    speed_url = f"{base_url}/edge/skater-skating-speed-detail/{player_id}/season"
-    zone_url = f"{base_url}/edge/skater-zone-time/{player_id}/season"
+    season = get_current_season()
+    detail_url = f"{base_url}/edge/skater-detail/{player_id}/{season}/2"
+    speed_url = f"{base_url}/edge/skater-skating-speed-detail/{player_id}/{season}/2"
+    zone_url = f"{base_url}/edge/skater-zone-time/{player_id}/{season}/2"
 
     try:
         # Make all 3 requests in parallel
@@ -684,7 +685,8 @@ async def async_fetch_goalie_edge_stats(client: httpx.AsyncClient, player_id: in
     """
     Async version of fetch_goalie_edge_stats using httpx.
     """
-    url = f"https://api-web.nhle.com/v1/edge/goalie-detail/{player_id}/season"
+    season = get_current_season()
+    url = f"https://api-web.nhle.com/v1/edge/goalie-detail/{player_id}/{season}/2"
 
     try:
         resp = await client.get(url)
