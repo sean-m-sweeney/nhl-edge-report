@@ -1,5 +1,6 @@
 """NHL API data fetching for Caps Edge - League Edition."""
 
+import bisect
 import logging
 import asyncio
 from datetime import datetime
@@ -43,13 +44,12 @@ def calculate_percentile(value: float, sorted_values: list) -> Optional[int]:
     """
     Calculate percentile ranking for a value within a sorted list.
 
-    Returns percentile as integer 0-100.
+    Returns percentile as integer 0-100. Uses binary search for O(log n).
     """
     if not sorted_values or value is None:
         return None
 
-    # Count how many values are below this value
-    count_below = sum(1 for v in sorted_values if v < value)
+    count_below = bisect.bisect_left(sorted_values, value)
     percentile = (count_below / len(sorted_values)) * 100
     return int(round(percentile))
 

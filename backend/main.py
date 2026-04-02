@@ -20,7 +20,10 @@ from backend.models import (
 from backend.fetcher import refresh_data
 
 # API key for protected endpoints
-API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "dev-key-change-me")
+API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "")
+if not API_REFRESH_KEY:
+    import logging
+    logging.warning("API_REFRESH_KEY not set - refresh endpoints will reject all requests")
 
 # Lock to prevent concurrent data refreshes
 _refresh_lock = asyncio.Lock()

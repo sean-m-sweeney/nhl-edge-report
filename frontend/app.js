@@ -1133,11 +1133,12 @@ function renderTeamSpeed() {
     const info = document.getElementById('team-speed-info');
     const arrow = document.getElementById('team-speed-arrow');
 
-    if (toggle && info && arrow) {
+    if (toggle && info && arrow && !toggle._hasListener) {
         toggle.addEventListener('click', () => {
             const isHidden = info.classList.toggle('hidden');
             arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
         });
+        toggle._hasListener = true;
     }
 }
 
