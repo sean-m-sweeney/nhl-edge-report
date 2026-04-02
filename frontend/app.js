@@ -15,12 +15,6 @@ let sortState = { field: 'points', direction: 'desc' };
 let goalieSortState = { field: 'wins', direction: 'desc' };
 let teamsSortState = { field: 'points', direction: 'desc' };
 
-// Virtual scrolling config (disabled - causes UX issues)
-const VIRTUAL_SCROLL = {
-    rowHeight: 41,
-    bufferRows: 5,
-    enabled: false      // Disabled - clunky scroll-in-box UX
-};
 let filterState = {
     type: 'league',
     team: 'WSH',
@@ -586,94 +580,30 @@ function getCurrentTbody() {
 }
 
 /**
- * Render visible rows with virtual scrolling
- */
-function renderVisibleRows(scrollTop = 0) {
-    const data = getCurrentData();
-    const renderer = getCurrentRenderer();
-    const tbody = getCurrentTbody();
-
-    if (!VIRTUAL_SCROLL.enabled || data.length < 50) {
-        // For small datasets, render all rows
-        tbody.innerHTML = data.map(renderer).join('');
-        return;
-    }
-
-    const { rowHeight, bufferRows } = VIRTUAL_SCROLL;
-    const containerHeight = 600; // Approximate visible height
-
-    // Calculate visible range
-    const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - bufferRows);
-    const visibleCount = Math.ceil(containerHeight / rowHeight) + (bufferRows * 2);
-    const endIndex = Math.min(data.length, startIndex + visibleCount);
-
-    // Render only visible rows
-    const visibleData = data.slice(startIndex, endIndex);
-    const rowsHtml = visibleData.map(renderer).join('');
-
-    // Calculate padding to maintain scroll position
-    const paddingTop = startIndex * rowHeight;
-    const paddingBottom = (data.length - endIndex) * rowHeight;
-
-    tbody.innerHTML = `
-        <tr style="height: ${paddingTop}px;"><td colspan="20"></td></tr>
-        ${rowsHtml}
-        <tr style="height: ${paddingBottom}px;"><td colspan="20"></td></tr>
-    `;
-}
-
-/**
  * Render the current table
  */
 function renderTable() {
     if (currentView === 'teams') {
-        // Show teams table, hide skater and goalie tables
         teamsTableWrapper.classList.remove('hidden');
         skaterTableWrapper.classList.add('hidden');
         goalieTableWrapper.classList.add('hidden');
         positionCountEl.textContent = `${teamStats.length} teams`;
-        // Hide team speed display in teams view
         if (teamSpeedDisplay) teamSpeedDisplay.classList.add('hidden');
-        // Render teams
         teamsBody.innerHTML = teamStats.map(renderTeamRow).join('');
     } else if (currentView === 'goalies') {
-        // Show goalie table, hide teams and skater tables
         teamsTableWrapper.classList.add('hidden');
         skaterTableWrapper.classList.add('hidden');
         goalieTableWrapper.classList.remove('hidden');
         positionCountEl.textContent = `${goalies.length} goalies`;
-        // Render with virtual scrolling
-        renderVisibleRows(0);
+        getCurrentTbody().innerHTML = goalies.map(getCurrentRenderer()).join('');
     } else {
-        // Show skater table, hide teams and goalie tables
         teamsTableWrapper.classList.add('hidden');
         skaterTableWrapper.classList.remove('hidden');
         goalieTableWrapper.classList.add('hidden');
         const currentPlayers = currentView === 'forwards' ? forwards : defensemen;
         positionCountEl.textContent = `${currentPlayers.length} ${currentView === 'forwards' ? 'forwards' : 'defensemen'}`;
-        // Render with virtual scrolling
-        renderVisibleRows(0);
+        getCurrentTbody().innerHTML = currentPlayers.map(getCurrentRenderer()).join('');
     }
-}
-
-/**
- * Setup virtual scroll listeners
- */
-function setupVirtualScroll() {
-    // Throttled scroll handler
-    let scrollTimeout;
-    const handleScroll = (e) => {
-        if (!VIRTUAL_SCROLL.enabled) return;
-
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            renderVisibleRows(e.target.scrollTop);
-        }, 16); // ~60fps
-    };
-
-    // Add scroll listeners to both table wrappers
-    skaterTableWrapper.addEventListener('scroll', handleScroll);
-    goalieTableWrapper.addEventListener('scroll', handleScroll);
 }
 
 /**
@@ -1307,7 +1237,6 @@ async function init() {
     setupViewTypeToggle();
     setupPositionToggle();
     setupFilterHandlers();
-    setupVirtualScroll();
     setupTeamClickHandler();
 
     // Fetch teams first (needed for team dropdown)

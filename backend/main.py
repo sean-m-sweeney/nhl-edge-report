@@ -61,6 +61,30 @@ app.add_middleware(
 FRONTEND_DIR = (Path(__file__).parent.parent / "frontend").resolve()
 
 
+def _format_goalie(row: dict) -> dict:
+    """Format a goalie database row for API response."""
+    return {
+        "player_id": row["player_id"],
+        "name": row["name"],
+        "jersey_number": row.get("jersey_number"),
+        "team_abbr": row.get("team_abbr"),
+        "team_name": row.get("team_name"),
+        "division": row.get("division"),
+        "conference": row.get("conference"),
+        "games_played": row.get("games_played"),
+        "wins": row.get("wins"),
+        "losses": row.get("losses"),
+        "ot_losses": row.get("ot_losses"),
+        "shutouts": row.get("shutouts"),
+        "goals_against_avg": round(row["goals_against_avg"], 2) if row.get("goals_against_avg") else None,
+        "save_pct": round(row["save_pct"] * 100, 1) if row.get("save_pct") else None,
+        "high_danger_save_pct": round(row["high_danger_save_pct"] * 100, 1) if row.get("high_danger_save_pct") else None,
+        "gaa_percentile": row.get("gaa_percentile"),
+        "save_pct_percentile": row.get("save_pct_percentile"),
+        "hdsv_percentile": row.get("hdsv_percentile"),
+    }
+
+
 def db_row_to_player(row: dict) -> Player:
     """Convert database row to Player model."""
     stats = None
@@ -202,31 +226,7 @@ async def get_goalies(
         conference=conference
     )
 
-    # Format goalie data for frontend
-    goalies = []
-    for row in rows:
-        goalie = {
-            "player_id": row["player_id"],
-            "name": row["name"],
-            "jersey_number": row.get("jersey_number"),
-            "team_abbr": row.get("team_abbr"),
-            "team_name": row.get("team_name"),
-            "division": row.get("division"),
-            "conference": row.get("conference"),
-            "games_played": row.get("games_played"),
-            "wins": row.get("wins"),
-            "losses": row.get("losses"),
-            "ot_losses": row.get("ot_losses"),
-            "shutouts": row.get("shutouts"),
-            "goals_against_avg": round(row["goals_against_avg"], 2) if row.get("goals_against_avg") else None,
-            "save_pct": round(row["save_pct"] * 100, 1) if row.get("save_pct") else None,
-            "high_danger_save_pct": round(row["high_danger_save_pct"] * 100, 1) if row.get("high_danger_save_pct") else None,
-            "gaa_percentile": row.get("gaa_percentile"),
-            "save_pct_percentile": row.get("save_pct_percentile"),
-            "hdsv_percentile": row.get("hdsv_percentile"),
-        }
-        goalies.append(goalie)
-
+    goalies = [_format_goalie(row) for row in rows]
     last_updated = database.get_last_updated()
 
     return {
@@ -243,30 +243,10 @@ async def get_goalie(player_id: int):
     if not row:
         raise HTTPException(status_code=404, detail="Goalie not found")
 
-    goalie = {
-        "player_id": row["player_id"],
-        "name": row["name"],
-        "jersey_number": row.get("jersey_number"),
-        "team_abbr": row.get("team_abbr"),
-        "team_name": row.get("team_name"),
-        "division": row.get("division"),
-        "conference": row.get("conference"),
-        "games_played": row.get("games_played"),
-        "wins": row.get("wins"),
-        "losses": row.get("losses"),
-        "ot_losses": row.get("ot_losses"),
-        "shutouts": row.get("shutouts"),
-        "goals_against_avg": round(row["goals_against_avg"], 2) if row.get("goals_against_avg") else None,
-        "save_pct": round(row["save_pct"] * 100, 1) if row.get("save_pct") else None,
-        "high_danger_save_pct": round(row["high_danger_save_pct"] * 100, 1) if row.get("high_danger_save_pct") else None,
-        "gaa_percentile": row.get("gaa_percentile"),
-        "save_pct_percentile": row.get("save_pct_percentile"),
-        "hdsv_percentile": row.get("hdsv_percentile"),
-    }
     last_updated = database.get_last_updated()
 
     return {
-        "goalie": goalie,
+        "goalie": _format_goalie(row),
         "last_updated": last_updated.isoformat() if last_updated else None
     }
 

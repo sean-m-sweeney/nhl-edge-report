@@ -888,10 +888,6 @@ def get_players_with_stats(team_abbr: Optional[str] = None,
         return [dict(row) for row in cursor.fetchall()]
 
 
-def get_all_players_with_stats() -> list:
-    """Get all players with their stats and edge stats (legacy compatibility)."""
-    return get_players_with_stats()
-
 
 def get_player_by_id(player_id: int) -> Optional[dict]:
     """Get a single player with all stats."""

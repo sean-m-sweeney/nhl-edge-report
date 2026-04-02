@@ -55,7 +55,7 @@ RUN echo '#!/bin/bash\n\
 service cron start\n\
 \n\
 # Run initial data refresh if database is empty\n\
-python -c "from backend.database import get_all_players_with_stats; exit(0 if get_all_players_with_stats() else 1)" 2>/dev/null || \
+python -c "from backend.database import get_players_with_stats; exit(0 if get_players_with_stats() else 1)" 2>/dev/null || \
     python scripts/refresh.py\n\
 \n\
 # Start the FastAPI server\n\
