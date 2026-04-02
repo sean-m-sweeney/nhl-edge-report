@@ -6,7 +6,6 @@ import threading
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from pathlib import Path
@@ -62,7 +61,11 @@ FRONTEND_DIR = (Path(__file__).parent.parent / "frontend").resolve()
 
 
 def _format_goalie(row: dict) -> dict:
-    """Format a goalie database row for API response."""
+    """Format a goalie database row for API response.
+
+    Converts save_pct and high_danger_save_pct from 0-1 decimals to 0-100 scale,
+    and rounds GAA to 2 decimal places.
+    """
     return {
         "player_id": row["player_id"],
         "name": row["name"],

@@ -40,6 +40,13 @@ def get_current_season() -> str:
         return f"{now.year - 1}{now.year}"
 
 
+def to_pct(val) -> Optional[int]:
+    """Convert NHL API percentile (0.0-1.0 decimal) to integer (0-100)."""
+    if val is None:
+        return None
+    return int(round(val * 100))
+
+
 def calculate_percentile(value: float, sorted_values: list) -> Optional[int]:
     """
     Calculate percentile ranking for a value within a sorted list.
@@ -480,119 +487,6 @@ def fetch_all_league_goalies(client: NHLClient) -> list:
     return goalies
 
 
-def fetch_goalie_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]:
-    """
-    Fetch Edge stats for a single goalie (high danger save %, jersey number).
-
-    Returns:
-        Dict with goalie Edge stats or None if not available
-    """
-    try:
-        detail = client.edge.goalie_detail(player_id=str(player_id))
-    except Exception as e:
-        logger.warning(f"Error fetching Edge stats for goalie {player_id}: {e}")
-        return None
-
-    if not detail:
-        return None
-
-    # Extract jersey number from player info
-    player_info = detail.get("player", {})
-    jersey_number = player_info.get("sweaterNumber")
-
-    # Extract high danger save percentage from shotLocationSummary
-    # Look for the 'high' location code which represents high-danger shots
-    high_danger_save_pct = None
-    shot_locations = detail.get("shotLocationSummary", [])
-    for location in shot_locations:
-        if location.get("locationCode") == "high":
-            high_danger_save_pct = location.get("savePctg")
-            break
-
-    return {
-        "high_danger_save_pct": high_danger_save_pct,
-        "jersey_number": jersey_number,
-    }
-
-
-def fetch_edge_stats(client: NHLClient, player_id: int) -> Optional[dict]:
-    """
-    Fetch Edge stats for a single player.
-
-    Returns:
-        Dict with Edge stats or None if not available
-    """
-    try:
-        # Get main Edge detail
-        detail = client.edge.skater_detail(player_id=str(player_id))
-
-        # Get speed detail for bursts over 22
-        speed_detail = client.edge.skater_skating_speed_detail(player_id=str(player_id))
-
-        # Get zone time for zone starts
-        zone_detail = client.edge.skater_zone_time(player_id=str(player_id))
-
-    except Exception as e:
-        logger.warning(f"Error fetching Edge stats for player {player_id}: {e}")
-        return None
-
-    if not detail:
-        return None
-
-    # Extract skating speed data
-    skating = detail.get("skatingSpeed", {})
-    speed_max = skating.get("speedMax", {})
-    bursts_20 = skating.get("burstsOver20", {})
-
-    # Extract speed detail for bursts over 22
-    speed_details = speed_detail.get("skatingSpeedDetails", {}) if speed_detail else {}
-    bursts_22 = speed_details.get("burstsOver22", {})
-
-    # Extract distance
-    distance = detail.get("totalDistanceSkated", {})
-
-    # Calculate distance per game
-    player_info = detail.get("player", {})
-    games_played = player_info.get("gamesPlayed", 1)
-    total_distance = distance.get("imperial", 0)
-    distance_per_game = total_distance / games_played if games_played > 0 else 0
-
-    # Extract zone time
-    zone_time = detail.get("zoneTimeDetails", {})
-
-    # Extract zone starts
-    zone_starts = zone_detail.get("zoneStarts", {}) if zone_detail else {}
-
-    # Extract shot speed
-    shot_speed = detail.get("topShotSpeed", {})
-
-    # Convert percentiles from decimal (0-1) to int (0-100)
-    def to_pct(val):
-        if val is None:
-            return None
-        return int(round(val * 100))
-
-    return {
-        "top_speed_mph": speed_max.get("imperial"),
-        "top_speed_percentile": to_pct(speed_max.get("percentile")),
-        "bursts_20_plus": bursts_20.get("value"),
-        "bursts_20_percentile": to_pct(bursts_20.get("percentile")),
-        "bursts_22_plus": bursts_22.get("value"),
-        "bursts_22_percentile": to_pct(bursts_22.get("percentile")),
-        "distance_per_game_miles": round(distance_per_game, 2) if distance_per_game else None,
-        "distance_percentile": to_pct(distance.get("percentile")),
-        "off_zone_time_pct": round(zone_time.get("offensiveZonePctg", 0) * 100, 1) if zone_time.get("offensiveZonePctg") else None,
-        "off_zone_percentile": to_pct(zone_time.get("offensiveZonePercentile")),
-        "def_zone_time_pct": round(zone_time.get("defensiveZonePctg", 0) * 100, 1) if zone_time.get("defensiveZonePctg") else None,
-        "def_zone_percentile": to_pct(zone_time.get("defensiveZonePercentile")),
-        "neu_zone_time_pct": round(zone_time.get("neutralZonePctg", 0) * 100, 1) if zone_time.get("neutralZonePctg") else None,
-        "zone_starts_off_pct": round(zone_starts.get("offensiveZoneStartsPctg", 0) * 100, 1) if zone_starts.get("offensiveZoneStartsPctg") else None,
-        "zone_starts_percentile": to_pct(zone_starts.get("offensiveZoneStartsPctgPercentile")),
-        "top_shot_speed_mph": shot_speed.get("imperial"),
-        "shot_speed_percentile": to_pct(shot_speed.get("percentile"))
-    }
-
-
 async def async_fetch_edge_stats(client: httpx.AsyncClient, player_id: int) -> Optional[dict]:
     """
     Async version of fetch_edge_stats using httpx.
@@ -653,12 +547,6 @@ async def async_fetch_edge_stats(client: httpx.AsyncClient, player_id: int) -> O
 
     # Extract shot speed
     shot_speed = detail.get("topShotSpeed", {})
-
-    # Convert percentiles from decimal (0-1) to int (0-100)
-    def to_pct(val):
-        if val is None:
-            return None
-        return int(round(val * 100))
 
     return {
         "top_speed_mph": speed_max.get("imperial"),

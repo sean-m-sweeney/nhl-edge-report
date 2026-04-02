@@ -3,7 +3,7 @@
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import os
 
@@ -1137,7 +1137,6 @@ def get_players_needing_edge_update(player_ids: list, max_age_hours: int = 6) ->
         existing = {row["player_id"]: row["updated_at"] for row in cursor.fetchall()}
 
     # Calculate cutoff time
-    from datetime import datetime, timedelta
     cutoff = datetime.now() - timedelta(hours=max_age_hours)
 
     needs_update = []
@@ -1184,7 +1183,6 @@ def get_goalies_needing_edge_update(player_ids: list, max_age_hours: int = 6) ->
         existing = {row["player_id"]: row["updated_at"] for row in cursor.fetchall()}
 
     # Calculate cutoff time
-    from datetime import datetime, timedelta
     cutoff = datetime.now() - timedelta(hours=max_age_hours)
 
     needs_update = []

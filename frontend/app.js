@@ -260,6 +260,9 @@ function renderPlayerRow(player) {
             <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">
                 ${formatStat(stats.shots_per_60, 1)}
             </td>
+            <td class="p-3 text-right font-mono text-gray-400">
+                ${stats.faceoff_win_pct ? formatStat(stats.faceoff_win_pct, 1) + '%' : '-'}
+            </td>
             <td class="p-3 text-right font-mono ${getPercentileClass(edge.off_zone_percentile)}">
                 ${edge.off_zone_time_pct ? formatStat(edge.off_zone_time_pct, 1) + '%' : '-'}
             </td>
@@ -381,6 +384,7 @@ function sortPlayersArray(playersArray, field, direction) {
         'hits': 'stats.hits',
         'blocks': 'stats.blocks',
         'shots_per_60': 'stats.shots_per_60',
+        'faceoff_win_pct': 'stats.faceoff_win_pct',
         'top_speed_mph': 'edge_stats.top_speed_mph',
         'bursts_20_plus': 'edge_stats.bursts_20_plus',
         'bursts_22_plus': 'edge_stats.bursts_22_plus',
@@ -1063,6 +1067,7 @@ function renderTeamSpeed() {
     const info = document.getElementById('team-speed-info');
     const arrow = document.getElementById('team-speed-arrow');
 
+    // Guard against duplicate listeners since renderTeamSpeed() is called on each view change
     if (toggle && info && arrow && !toggle._hasListener) {
         toggle.addEventListener('click', () => {
             const isHidden = info.classList.toggle('hidden');
