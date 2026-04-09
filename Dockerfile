@@ -1,5 +1,5 @@
 # Stage 1: Build Tailwind CSS
-FROM node:22-slim AS css-builder
+FROM node:25-slim AS css-builder
 
 WORKDIR /build
 
