@@ -12,7 +12,7 @@ COPY frontend/ ./frontend/
 RUN npm run build:css
 
 # Stage 2: Python application
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
