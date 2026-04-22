@@ -1,12 +1,14 @@
 # Caps Edge data refresh schedule
-# Runs once daily at 6:00 AM ET
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 PYTHONPATH=/app
 DATA_DIR=/app/data
 
-# 6:00 AM ET (06:00)
+# Daily NHL data refresh at 6:00 AM ET
 0 6 * * * root cd /app && python scripts/refresh.py >> /var/log/edge-report-refresh.log 2>&1
+
+# Weekly HockeyDB mapping delta on Sundays 7:00 AM ET (new rookies, retry misses)
+0 7 * * 0 root cd /app && python scripts/refresh_hockeydb.py >> /var/log/edge-report-hockeydb.log 2>&1
 
 # Empty line required at end of crontab

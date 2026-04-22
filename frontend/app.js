@@ -191,13 +191,6 @@ function formatStat(value, decimals = null) {
 }
 
 /**
- * Generate Hockey-Reference search URL
- */
-function getHockeyRefUrl(playerName) {
-    return `https://www.hockey-reference.com/search/search.fcgi?search=${encodeURIComponent(playerName)}`;
-}
-
-/**
  * Get CSS class for percentile tier (0-100 -> pct-0 through pct-90)
  */
 function getPercentileClass(pct) {
@@ -223,14 +216,16 @@ function renderPlayerRow(player) {
     const showTeamCol = filterState.type !== 'team';
 
     return `
-        <tr class="table-row group transition-colors">
+        <tr class="table-row group transition-colors" data-player-id="${player.player_id}">
             <td class="sticky left-0 z-30 bg-void border-r border-grid-line p-3 font-mono font-bold text-white text-center">
                 #${player.jersey_number || '-'}
             </td>
             <td class="p-3 font-bold text-white truncate">
-                <a href="${getHockeyRefUrl(player.name)}" target="_blank" class="hover:text-neon-cyan hover:underline decoration-neon-cyan underline-offset-4">
+                <button type="button" class="player-name-toggle text-left hover:text-neon-cyan hover:underline decoration-neon-cyan underline-offset-4 cursor-pointer"
+                        data-player-id="${player.player_id}" data-player-name="${player.name.replace(/"/g, '&quot;')}">
                     ${player.name}
-                </a>
+                    <span class="detail-caret text-neon-cyan ml-1 text-[10px]" aria-hidden="true">▸</span>
+                </button>
             </td>
             <td class="p-3 text-gray-400 team-col ${showTeamCol ? '' : 'hidden'}">${player.team_abbr || '-'}</td>
             <td class="p-3 text-gray-400 text-center">${player.position}</td>
@@ -244,6 +239,9 @@ function renderPlayerRow(player) {
             <td class="p-3 text-right font-mono text-gray-400 border-r border-grid-line">${formatStat(stats.blocks)}</td>
             <td class="p-3 text-right font-mono ${getPercentileClass(edge.top_speed_percentile)}">
                 ${formatStat(edge.top_speed_mph, 1)}
+            </td>
+            <td class="p-3 text-right font-mono ${getPercentileClass(edge.bursts_18_percentile)}">
+                ${formatStat(edge.bursts_18_plus, 0)}
             </td>
             <td class="p-3 text-right font-mono ${getPercentileClass(edge.bursts_20_percentile)}">
                 ${formatStat(edge.bursts_20_plus, 0)}
@@ -285,9 +283,7 @@ function renderGoalieRow(goalie) {
                 #${goalie.jersey_number || '-'}
             </td>
             <td class="p-3 font-bold text-white truncate">
-                <a href="${getHockeyRefUrl(goalie.name)}" target="_blank" class="hover:text-neon-cyan hover:underline decoration-neon-cyan underline-offset-4">
-                    ${goalie.name}
-                </a>
+                ${goalie.name}
             </td>
             <td class="p-3 text-gray-400 team-col ${showTeamCol ? '' : 'hidden'}">${goalie.team_abbr || '-'}</td>
             <td class="p-3 text-right font-mono text-gray-400">${formatStat(goalie.games_played)}</td>
@@ -386,6 +382,7 @@ function sortPlayersArray(playersArray, field, direction) {
         'shots_per_60': 'stats.shots_per_60',
         'faceoff_win_pct': 'stats.faceoff_win_pct',
         'top_speed_mph': 'edge_stats.top_speed_mph',
+        'bursts_18_plus': 'edge_stats.bursts_18_plus',
         'bursts_20_plus': 'edge_stats.bursts_20_plus',
         'bursts_22_plus': 'edge_stats.bursts_22_plus',
         'distance_per_game_miles': 'edge_stats.distance_per_game_miles',
@@ -1233,6 +1230,189 @@ function setupFilterHandlers() {
     });
 }
 
+// =============================================================================
+// Player history / inline detail row
+// =============================================================================
+
+const playerHistoryCache = new Map();
+
+async function fetchPlayerHistory(playerId) {
+    if (playerHistoryCache.has(playerId)) return playerHistoryCache.get(playerId);
+    const resp = await fetch(`/api/players/${playerId}/history`);
+    if (!resp.ok) throw new Error(`history fetch failed: ${resp.status}`);
+    const data = await resp.json();
+    playerHistoryCache.set(playerId, data);
+    return data;
+}
+
+function detailColspan() {
+    // Keep in sync with the number of TH cells in #players-table -- includes the
+    // team column even when it's hidden because the browser counts hidden cells.
+    const head = document.querySelector('#players-table thead tr');
+    return head ? head.children.length : 20;
+}
+
+function renderSparkline(values, width = 70, height = 18) {
+    const clean = values.filter(v => v !== null && v !== undefined);
+    if (clean.length < 2) return '';
+    const min = Math.min(...clean);
+    const max = Math.max(...clean);
+    const range = max - min || 1;
+    const step = width / Math.max(values.length - 1, 1);
+    const pts = values.map((v, i) => {
+        if (v === null || v === undefined) return null;
+        const x = (i * step).toFixed(1);
+        const y = (height - ((v - min) / range) * height).toFixed(1);
+        return `${x},${y}`;
+    }).filter(Boolean).join(' ');
+    return `<svg width="${width}" height="${height}" class="inline-block align-middle">
+        <polyline fill="none" stroke="currentColor" stroke-width="1.2" points="${pts}" />
+    </svg>`;
+}
+
+function trendBadge(label, value) {
+    if (!value) return `<span class="trend-badge trend-unknown">${label} —</span>`;
+    const glyph = value === 'rising' ? '▲' : value === 'declining' ? '▼' : '─';
+    return `<span class="trend-badge trend-${value}">${label} ${glyph} ${value}</span>`;
+}
+
+function renderDetailRow(history, colspan) {
+    const { seasons, trends, hockeydb_url: hockeydbUrl, player } = history;
+
+    if (!seasons.length) {
+        return `
+            <tr class="detail-row"><td colspan="${colspan}" class="p-4 bg-black/50">
+                <div class="text-gray-400 text-xs">No NHL Edge history yet for ${player.name}.</div>
+            </td></tr>
+        `;
+    }
+
+    const topSeries = seasons.map(s => s.edge_stats.top_speed_mph);
+    const b18Series = seasons.map(s => s.edge_stats.bursts_18_plus);
+    const b20Series = seasons.map(s => s.edge_stats.bursts_20_plus);
+    const distSeries = seasons.map(s => s.edge_stats.distance_per_game_miles);
+    const shotSeries = seasons.map(s => s.edge_stats.top_shot_speed_mph);
+
+    const rows = seasons.map(s => {
+        const e = s.edge_stats;
+        return `
+            <tr>
+                <td class="px-2 py-1 font-mono text-gray-300">${s.season}</td>
+                <td class="px-2 py-1 text-right font-mono text-gray-400">${formatStat(s.games_played)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.top_speed_percentile)}">${formatStat(e.top_speed_mph, 1)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_18_percentile)}">${formatStat(e.bursts_18_plus, 0)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_20_percentile)}">${formatStat(e.bursts_20_plus, 0)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_22_percentile)}">${formatStat(e.bursts_22_plus, 0)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.distance_percentile)}">${formatStat(e.distance_per_game_miles, 2)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.shot_speed_percentile)}">${formatStat(e.top_shot_speed_mph, 1)}</td>
+                <td class="px-2 py-1 text-right font-mono text-gray-400">${e.off_zone_time_pct != null ? formatStat(e.off_zone_time_pct, 1) + '%' : '-'}</td>
+                <td class="px-2 py-1 text-right font-mono text-gray-400">${e.off_zone_5v5_pct != null ? formatStat(e.off_zone_5v5_pct, 1) + '%' : '-'}</td>
+                <td class="px-2 py-1 text-right font-mono text-gray-400">${e.off_zone_pp_pct != null ? formatStat(e.off_zone_pp_pct, 1) + '%' : '-'}</td>
+                <td class="px-2 py-1 text-right font-mono text-gray-400">${e.off_zone_pk_pct != null ? formatStat(e.off_zone_pk_pct, 1) + '%' : '-'}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const externalLink = hockeydbUrl
+        ? `<a href="${hockeydbUrl}" target="_blank" rel="noopener" class="text-neon-cyan hover:underline text-xs">HockeyDB ↗</a>`
+        : `<span class="text-gray-500 text-xs italic">HockeyDB link unavailable</span>`;
+
+    return `
+        <tr class="detail-row"><td colspan="${colspan}" class="p-0 bg-black/50">
+            <div class="p-4 border-l-2 border-neon-cyan">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div class="text-white font-bold">
+                        ${player.name}
+                        <span class="text-gray-400 font-normal text-xs ml-2">#${player.jersey_number || '-'} · ${player.team_abbr || '-'} · ${player.position}</span>
+                    </div>
+                    <div>${externalLink}</div>
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3 text-xs">
+                    ${trendBadge('Top Speed', trends.top_speed)}
+                    ${trendBadge('Bursts 18+', trends.bursts_18_plus)}
+                    ${trendBadge('Bursts 20+', trends.bursts_20_plus)}
+                    ${trendBadge('Dist/G', trends.distance_per_game_miles)}
+                    ${trendBadge('Shot Speed', trends.top_shot_speed_mph)}
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="text-[11px] border-collapse">
+                        <thead class="text-neon-cyan font-bold">
+                            <tr>
+                                <th class="px-2 py-1 text-left">SEASON</th>
+                                <th class="px-2 py-1 text-right">GP</th>
+                                <th class="px-2 py-1 text-right">TOP MPH</th>
+                                <th class="px-2 py-1 text-right">B18+</th>
+                                <th class="px-2 py-1 text-right">B20+</th>
+                                <th class="px-2 py-1 text-right">B22+</th>
+                                <th class="px-2 py-1 text-right">DIST/G</th>
+                                <th class="px-2 py-1 text-right">SLAP MPH</th>
+                                <th class="px-2 py-1 text-right">OZ%</th>
+                                <th class="px-2 py-1 text-right">OZ 5v5%</th>
+                                <th class="px-2 py-1 text-right">OZ PP%</th>
+                                <th class="px-2 py-1 text-right">OZ PK%</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div class="flex gap-4 mt-3 text-[11px] text-gray-400">
+                    <div><span class="text-neon-green">TOP</span> ${renderSparkline(topSeries)}</div>
+                    <div><span class="text-neon-green">B18+</span> ${renderSparkline(b18Series)}</div>
+                    <div><span class="text-neon-green">B20+</span> ${renderSparkline(b20Series)}</div>
+                    <div><span class="text-neon-green">Dist/G</span> ${renderSparkline(distSeries)}</div>
+                    <div><span class="text-neon-pink">Shot</span> ${renderSparkline(shotSeries)}</div>
+                </div>
+            </div>
+        </td></tr>
+    `;
+}
+
+async function togglePlayerDetail(playerId, button) {
+    const mainRow = button.closest('tr[data-player-id]');
+    if (!mainRow) return;
+
+    const next = mainRow.nextElementSibling;
+    if (next && next.classList.contains('detail-row') && next.dataset.forPlayer === String(playerId)) {
+        next.remove();
+        const caret = button.querySelector('.detail-caret');
+        if (caret) caret.textContent = '▸';
+        return;
+    }
+
+    // Close any other open detail row to keep the table tidy.
+    document.querySelectorAll('#players-body .detail-row').forEach(r => r.remove());
+    document.querySelectorAll('.detail-caret').forEach(c => c.textContent = '▸');
+
+    // Insert a loading placeholder so clicks feel responsive on first open.
+    const colspan = detailColspan();
+    const loader = document.createElement('tr');
+    loader.className = 'detail-row';
+    loader.dataset.forPlayer = String(playerId);
+    loader.innerHTML = `<td colspan="${colspan}" class="p-4 bg-black/50 text-gray-400 text-xs">Loading history…</td>`;
+    mainRow.parentNode.insertBefore(loader, mainRow.nextSibling);
+
+    const caret = button.querySelector('.detail-caret');
+    if (caret) caret.textContent = '▾';
+
+    try {
+        const history = await fetchPlayerHistory(playerId);
+        loader.outerHTML = renderDetailRow(history, colspan);
+    } catch (err) {
+        loader.innerHTML = `<td colspan="${colspan}" class="p-4 bg-black/50 text-red-400 text-xs">Failed to load history: ${err.message}</td>`;
+    }
+}
+
+function setupPlayerClickHandler() {
+    if (!playersBody) return;
+    playersBody.addEventListener('click', (e) => {
+        const toggle = e.target.closest('.player-name-toggle');
+        if (!toggle) return;
+        const playerId = Number(toggle.dataset.playerId);
+        if (!playerId) return;
+        togglePlayerDetail(playerId, toggle);
+    });
+}
+
 /**
  * Initialize the app
  */
@@ -1243,6 +1423,7 @@ async function init() {
     setupPositionToggle();
     setupFilterHandlers();
     setupTeamClickHandler();
+    setupPlayerClickHandler();
 
     // Fetch teams first (needed for team dropdown)
     await fetchTeams();

@@ -487,86 +487,131 @@ def fetch_all_league_goalies(client: NHLClient) -> list:
     return goalies
 
 
-async def async_fetch_edge_stats(client: httpx.AsyncClient, player_id: int) -> Optional[dict]:
-    """
-    Async version of fetch_edge_stats using httpx.
+def _pct_from_frac(frac) -> Optional[float]:
+    """Convert a 0.0-1.0 fraction to a rounded percentage for display."""
+    if frac is None:
+        return None
+    return round(frac * 100, 1)
 
-    Makes 3 parallel API calls for a single player's Edge data.
+
+async def async_fetch_edge_stats_for_season(
+    client: httpx.AsyncClient, player_id: int, season: str
+) -> Optional[dict]:
     """
-    # Build URLs for the 3 Edge endpoints (season/game-type format)
+    Fetch a player's Edge stats for a specific season.
+
+    Makes 3 parallel API calls (detail + speed-detail + zone-time) and returns
+    a dict with all Edge fields plus games_played for that season.
+    Returns None if the primary detail endpoint fails.
+    """
     base_url = "https://api-web.nhle.com/v1"
-    season = get_current_season()
     detail_url = f"{base_url}/edge/skater-detail/{player_id}/{season}/2"
     speed_url = f"{base_url}/edge/skater-skating-speed-detail/{player_id}/{season}/2"
     zone_url = f"{base_url}/edge/skater-zone-time/{player_id}/{season}/2"
 
     try:
-        # Make all 3 requests in parallel
         detail_resp, speed_resp, zone_resp = await asyncio.gather(
             client.get(detail_url),
             client.get(speed_url),
             client.get(zone_url),
             return_exceptions=True
         )
-
-        # Parse responses (handle errors gracefully)
         detail = detail_resp.json() if not isinstance(detail_resp, Exception) and detail_resp.status_code == 200 else None
         speed_detail = speed_resp.json() if not isinstance(speed_resp, Exception) and speed_resp.status_code == 200 else None
         zone_detail = zone_resp.json() if not isinstance(zone_resp, Exception) and zone_resp.status_code == 200 else None
-
     except Exception as e:
-        logger.warning(f"Error fetching async Edge stats for player {player_id}: {e}")
+        logger.warning(f"Error fetching async Edge stats for player {player_id} season {season}: {e}")
         return None
 
     if not detail:
         return None
 
-    # Extract skating speed data
+    # Skating speed (top) and bursts-over-20 from skater-detail
     skating = detail.get("skatingSpeed", {})
     speed_max = skating.get("speedMax", {})
     bursts_20 = skating.get("burstsOver20", {})
 
-    # Extract speed detail for bursts over 22
+    # Speed-detail buckets: 18-20 / 20-22 / over-22
     speed_details = speed_detail.get("skatingSpeedDetails", {}) if speed_detail else {}
     bursts_22 = speed_details.get("burstsOver22", {})
+    bursts_20_22 = speed_details.get("bursts20To22", {})
+    bursts_18_20 = speed_details.get("bursts18To20", {})
 
-    # Extract distance
+    # Compute bursts 18+ as sum of the three buckets. Skip if all are missing.
+    b18_val = bursts_18_20.get("value")
+    b20_22_val = bursts_20_22.get("value")
+    b22_val = bursts_22.get("value")
+    if b18_val is not None or b20_22_val is not None or b22_val is not None:
+        bursts_18_plus = (b18_val or 0) + (b20_22_val or 0) + (b22_val or 0)
+    else:
+        bursts_18_plus = None
+    bursts_18_pct = to_pct(bursts_18_20.get("percentile"))
+
+    # Distance
     distance = detail.get("totalDistanceSkated", {})
-
-    # Calculate distance per game
     player_info = detail.get("player", {})
-    games_played = player_info.get("gamesPlayed", 1)
-    total_distance = distance.get("imperial", 0)
-    distance_per_game = total_distance / games_played if games_played > 0 else 0
+    games_played = player_info.get("gamesPlayed") or 0
+    birth_date = player_info.get("birthDate")
+    total_distance = distance.get("imperial", 0) or 0
+    distance_per_game = (total_distance / games_played) if games_played > 0 else None
 
-    # Extract zone time
-    zone_time = detail.get("zoneTimeDetails", {})
+    # Aggregate zone time is on skater-detail (dict).
+    zone_time = detail.get("zoneTimeDetails", {}) or {}
 
-    # Extract zone starts
+    # Situational zone time comes from the zone-time endpoint (array by strengthCode).
+    sit_map = {}
+    if zone_detail:
+        for row in zone_detail.get("zoneTimeDetails", []) or []:
+            code = row.get("strengthCode")
+            if code:
+                sit_map[code] = row
+
+    def sit_off(code: str) -> Optional[float]:
+        return _pct_from_frac(sit_map.get(code, {}).get("offensiveZonePctg"))
+
+    def sit_def(code: str) -> Optional[float]:
+        return _pct_from_frac(sit_map.get(code, {}).get("defensiveZonePctg"))
+
+    # Zone starts
     zone_starts = zone_detail.get("zoneStarts", {}) if zone_detail else {}
 
-    # Extract shot speed
+    # Shot speed
     shot_speed = detail.get("topShotSpeed", {})
 
     return {
         "top_speed_mph": speed_max.get("imperial"),
         "top_speed_percentile": to_pct(speed_max.get("percentile")),
+        "bursts_18_plus": bursts_18_plus,
+        "bursts_18_percentile": bursts_18_pct,
         "bursts_20_plus": bursts_20.get("value"),
         "bursts_20_percentile": to_pct(bursts_20.get("percentile")),
         "bursts_22_plus": bursts_22.get("value"),
         "bursts_22_percentile": to_pct(bursts_22.get("percentile")),
         "distance_per_game_miles": round(distance_per_game, 2) if distance_per_game else None,
         "distance_percentile": to_pct(distance.get("percentile")),
-        "off_zone_time_pct": round(zone_time.get("offensiveZonePctg", 0) * 100, 1) if zone_time.get("offensiveZonePctg") else None,
+        "off_zone_time_pct": _pct_from_frac(zone_time.get("offensiveZonePctg")),
         "off_zone_percentile": to_pct(zone_time.get("offensiveZonePercentile")),
-        "def_zone_time_pct": round(zone_time.get("defensiveZonePctg", 0) * 100, 1) if zone_time.get("defensiveZonePctg") else None,
+        "def_zone_time_pct": _pct_from_frac(zone_time.get("defensiveZonePctg")),
         "def_zone_percentile": to_pct(zone_time.get("defensiveZonePercentile")),
-        "neu_zone_time_pct": round(zone_time.get("neutralZonePctg", 0) * 100, 1) if zone_time.get("neutralZonePctg") else None,
-        "zone_starts_off_pct": round(zone_starts.get("offensiveZoneStartsPctg", 0) * 100, 1) if zone_starts.get("offensiveZoneStartsPctg") else None,
+        "neu_zone_time_pct": _pct_from_frac(zone_time.get("neutralZonePctg")),
+        "off_zone_5v5_pct": sit_off("es"),
+        "off_zone_pp_pct": sit_off("pp"),
+        "off_zone_pk_pct": sit_off("pk"),
+        "def_zone_5v5_pct": sit_def("es"),
+        "def_zone_pp_pct": sit_def("pp"),
+        "def_zone_pk_pct": sit_def("pk"),
+        "zone_starts_off_pct": _pct_from_frac(zone_starts.get("offensiveZoneStartsPctg")),
         "zone_starts_percentile": to_pct(zone_starts.get("offensiveZoneStartsPctgPercentile")),
         "top_shot_speed_mph": shot_speed.get("imperial"),
-        "shot_speed_percentile": to_pct(shot_speed.get("percentile"))
+        "shot_speed_percentile": to_pct(shot_speed.get("percentile")),
+        "games_played": games_played or None,
+        "birth_date": birth_date,
     }
+
+
+async def async_fetch_edge_stats(client: httpx.AsyncClient, player_id: int) -> Optional[dict]:
+    """Fetch a player's current-season Edge stats."""
+    return await async_fetch_edge_stats_for_season(client, player_id, get_current_season())
 
 
 async def async_fetch_goalie_edge_stats(client: httpx.AsyncClient, player_id: int) -> Optional[dict]:
@@ -816,6 +861,7 @@ def refresh_data():
 
     # 8. Save Edge stats with calculated percentiles
     players_updated = 0
+    current_season = get_current_season()
     for player in all_skaters:
         player_id = player["player_id"]
 
@@ -834,6 +880,12 @@ def refresh_data():
                 edge["distance_percentile"] = calculate_percentile(dist_per_game, all_distance_per_game)
 
             database.upsert_player_edge_stats(player_id, edge)
+            # Mirror current season into history table so the detail view stays live.
+            database.upsert_player_season_edge_stats(
+                player_id, current_season, edge.get("games_played"), edge
+            )
+            # Persist birth_date opportunistically (used for HockeyDB disambiguation).
+            database.set_player_birth_date(player_id, edge.get("birth_date"))
             players_updated += 1
 
     # 9. Fetch and save all goalies

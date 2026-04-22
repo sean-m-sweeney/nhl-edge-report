@@ -30,6 +30,8 @@ class PlayerEdgeStats(BaseModel):
     top_speed_percentile: Optional[int] = None
 
     # Bursts
+    bursts_18_plus: Optional[int] = None
+    bursts_18_percentile: Optional[int] = None
     bursts_20_plus: Optional[int] = None
     bursts_20_percentile: Optional[int] = None
     bursts_22_plus: Optional[int] = None
@@ -39,12 +41,20 @@ class PlayerEdgeStats(BaseModel):
     distance_per_game_miles: Optional[float] = None
     distance_percentile: Optional[int] = None
 
-    # Zone Time
+    # Zone Time (aggregate across all situations)
     off_zone_time_pct: Optional[float] = None
     off_zone_percentile: Optional[int] = None
     def_zone_time_pct: Optional[float] = None
     def_zone_percentile: Optional[int] = None
     neu_zone_time_pct: Optional[float] = None
+
+    # Zone time broken out by situation
+    off_zone_5v5_pct: Optional[float] = None
+    off_zone_pp_pct: Optional[float] = None
+    off_zone_pk_pct: Optional[float] = None
+    def_zone_5v5_pct: Optional[float] = None
+    def_zone_pp_pct: Optional[float] = None
+    def_zone_pk_pct: Optional[float] = None
 
     # Zone Starts
     zone_starts_off_pct: Optional[float] = None
@@ -122,3 +132,31 @@ class Division(BaseModel):
 class DivisionsResponse(BaseModel):
     """API response for divisions list."""
     divisions: list[Division]
+
+
+class SeasonEdgeRow(BaseModel):
+    """A single season's Edge snapshot for a player."""
+    season: str
+    games_played: Optional[int] = None
+    edge_stats: PlayerEdgeStats
+
+
+class TrendBadges(BaseModel):
+    """Trend classification across seasons for key Edge metrics.
+
+    Each field is one of 'rising', 'stable', 'declining', or None when there
+    isn't enough data (fewer than two seasons with values).
+    """
+    top_speed: Optional[str] = None
+    bursts_18_plus: Optional[str] = None
+    bursts_20_plus: Optional[str] = None
+    distance_per_game_miles: Optional[str] = None
+    top_shot_speed_mph: Optional[str] = None
+
+
+class PlayerSeasonHistory(BaseModel):
+    """Response body for the player history endpoint."""
+    player: Player
+    seasons: list[SeasonEdgeRow]
+    trends: TrendBadges
+    hockeydb_url: Optional[str] = None

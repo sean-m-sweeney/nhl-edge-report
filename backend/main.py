@@ -14,9 +14,12 @@ from backend import database
 from backend.models import (
     Player, PlayerStats, PlayerEdgeStats,
     PlayerResponse, PlayersResponse, HealthResponse, RefreshResponse,
-    TeamsResponse, DivisionsResponse
+    TeamsResponse, DivisionsResponse,
+    PlayerSeasonHistory, SeasonEdgeRow, TrendBadges,
 )
 from backend.fetcher import refresh_data
+from backend.trends import classify_trend
+from backend.hockeydb import hockeydb_profile_url
 
 # API key for protected endpoints
 API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "")
@@ -88,6 +91,49 @@ def _format_goalie(row: dict) -> dict:
     }
 
 
+def _round_or_none(value, decimals: int):
+    return round(value, decimals) if value is not None else None
+
+
+def _edge_stats_from_row(row: dict) -> PlayerEdgeStats:
+    """Build a PlayerEdgeStats from a row that has Edge columns."""
+    return PlayerEdgeStats(
+        top_speed_mph=_round_or_none(row.get("top_speed_mph"), 1),
+        top_speed_percentile=row.get("top_speed_percentile"),
+        bursts_18_plus=row.get("bursts_18_plus"),
+        bursts_18_percentile=row.get("bursts_18_percentile"),
+        bursts_20_plus=row.get("bursts_20_plus"),
+        bursts_20_percentile=row.get("bursts_20_percentile"),
+        bursts_22_plus=row.get("bursts_22_plus"),
+        bursts_22_percentile=row.get("bursts_22_percentile"),
+        distance_per_game_miles=_round_or_none(row.get("distance_per_game_miles"), 2),
+        distance_percentile=row.get("distance_percentile"),
+        off_zone_time_pct=_round_or_none(row.get("off_zone_time_pct"), 1),
+        off_zone_percentile=row.get("off_zone_percentile"),
+        def_zone_time_pct=_round_or_none(row.get("def_zone_time_pct"), 1),
+        def_zone_percentile=row.get("def_zone_percentile"),
+        neu_zone_time_pct=_round_or_none(row.get("neu_zone_time_pct"), 1),
+        off_zone_5v5_pct=_round_or_none(row.get("off_zone_5v5_pct"), 1),
+        off_zone_pp_pct=_round_or_none(row.get("off_zone_pp_pct"), 1),
+        off_zone_pk_pct=_round_or_none(row.get("off_zone_pk_pct"), 1),
+        def_zone_5v5_pct=_round_or_none(row.get("def_zone_5v5_pct"), 1),
+        def_zone_pp_pct=_round_or_none(row.get("def_zone_pp_pct"), 1),
+        def_zone_pk_pct=_round_or_none(row.get("def_zone_pk_pct"), 1),
+        zone_starts_off_pct=_round_or_none(row.get("zone_starts_off_pct"), 1),
+        zone_starts_percentile=row.get("zone_starts_percentile"),
+        top_shot_speed_mph=_round_or_none(row.get("top_shot_speed_mph"), 1),
+        shot_speed_percentile=row.get("shot_speed_percentile"),
+        shots_percentile=row.get("shots_percentile"),
+    )
+
+
+def _format_season_label(season: str) -> str:
+    """'20232024' -> '2023-24'. Falls back to the raw string if malformed."""
+    if len(season) == 8 and season.isdigit():
+        return f"{season[:4]}-{season[6:]}"
+    return season
+
+
 def db_row_to_player(row: dict) -> Player:
     """Convert database row to Player model."""
     stats = None
@@ -109,28 +155,9 @@ def db_row_to_player(row: dict) -> Player:
             p60_percentile=row.get("p60_percentile")
         )
 
-    edge_stats = None
-    if row.get("top_speed_mph") is not None or row.get("bursts_20_plus") is not None:
-        edge_stats = PlayerEdgeStats(
-            top_speed_mph=round(row["top_speed_mph"], 1) if row.get("top_speed_mph") else None,
-            top_speed_percentile=row.get("top_speed_percentile"),
-            bursts_20_plus=row.get("bursts_20_plus"),
-            bursts_20_percentile=row.get("bursts_20_percentile"),
-            bursts_22_plus=row.get("bursts_22_plus"),
-            bursts_22_percentile=row.get("bursts_22_percentile"),
-            distance_per_game_miles=round(row["distance_per_game_miles"], 2) if row.get("distance_per_game_miles") else None,
-            distance_percentile=row.get("distance_percentile"),
-            off_zone_time_pct=round(row["off_zone_time_pct"], 1) if row.get("off_zone_time_pct") else None,
-            off_zone_percentile=row.get("off_zone_percentile"),
-            def_zone_time_pct=round(row["def_zone_time_pct"], 1) if row.get("def_zone_time_pct") else None,
-            def_zone_percentile=row.get("def_zone_percentile"),
-            neu_zone_time_pct=round(row["neu_zone_time_pct"], 1) if row.get("neu_zone_time_pct") else None,
-            zone_starts_off_pct=round(row["zone_starts_off_pct"], 1) if row.get("zone_starts_off_pct") else None,
-            zone_starts_percentile=row.get("zone_starts_percentile"),
-            top_shot_speed_mph=round(row["top_shot_speed_mph"], 1) if row.get("top_shot_speed_mph") else None,
-            shot_speed_percentile=row.get("shot_speed_percentile"),
-            shots_percentile=row.get("shots_percentile")
-        )
+    edge_stats = _edge_stats_from_row(row) if (
+        row.get("top_speed_mph") is not None or row.get("bursts_20_plus") is not None
+    ) else None
 
     return Player(
         player_id=row["player_id"],
@@ -190,6 +217,49 @@ async def get_player(player_id: int):
     return PlayerResponse(
         player=player,
         last_updated=last_updated
+    )
+
+
+@app.get("/api/players/{player_id}/history", response_model=PlayerSeasonHistory)
+async def get_player_history(player_id: int):
+    """Per-season Edge history, trend badges, and HockeyDB profile link for one player."""
+    row = database.get_player_by_id(player_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Player not found")
+    player = db_row_to_player(row)
+
+    season_rows = database.get_player_season_history(player_id)
+    seasons = [
+        SeasonEdgeRow(
+            season=_format_season_label(s["season"]),
+            games_played=s.get("games_played"),
+            edge_stats=_edge_stats_from_row(s),
+        )
+        for s in season_rows
+    ]
+
+    # Trend classifiers on the metrics that have the most meaning to fans.
+    def series(key: str) -> list:
+        return [s.get(key) for s in season_rows]
+
+    trends = TrendBadges(
+        top_speed=classify_trend(series("top_speed_mph")),
+        bursts_18_plus=classify_trend(series("bursts_18_plus")),
+        bursts_20_plus=classify_trend(series("bursts_20_plus")),
+        distance_per_game_miles=classify_trend(series("distance_per_game_miles")),
+        top_shot_speed_mph=classify_trend(series("top_shot_speed_mph")),
+    )
+
+    mapping = database.get_hockeydb_mapping(player_id)
+    hockeydb_url = None
+    if mapping and mapping.get("hockeydb_pid"):
+        hockeydb_url = hockeydb_profile_url(mapping["hockeydb_pid"])
+
+    return PlayerSeasonHistory(
+        player=player,
+        seasons=seasons,
+        trends=trends,
+        hockeydb_url=hockeydb_url,
     )
 
 

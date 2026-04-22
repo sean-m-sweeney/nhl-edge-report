@@ -10,7 +10,7 @@
     <meta property="og:title" content="NHL Edge Report">
     <meta property="og:description" content="Beyond the box score. Advanced NHL Edge tracking stats for every fan.">
     <!-- Tailwind CSS built at deploy time - no more CDN! -->
-    <link rel="stylesheet" href="styles.css?v=18">
+    <link rel="stylesheet" href="styles.css?v=19">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -65,6 +65,7 @@
                         <h3 class="text-neon-green font-bold mb-2">SKATING (NHL EDGE)</h3>
                         <ul class="space-y-1 text-gray-400">
                             <li><span class="text-white">TOP MPH</span> — Fastest skating speed recorded this season</li>
+                            <li><span class="text-white">BURST 18+</span> — Total skating bursts over 18 mph (18-20, 20-22, and 22+ combined)</li>
                             <li><span class="text-white">BURST 20+</span> — Total skating bursts over 20 mph</li>
                             <li><span class="text-white">BURST 22+</span> — Total skating bursts over 22 mph (elite speed)</li>
                             <li><span class="text-white">DIST/G</span> — Average distance skated per game (miles)</li>
@@ -88,7 +89,7 @@
                 </div>
                 <div class="mt-3 p-3 bg-void border border-grid-line text-xs">
                     <h3 class="font-bold mb-2 text-gray-300">PERCENTILE HIGHLIGHTING</h3>
-                    <p class="text-gray-400 mb-2">Stats with percentile data are color-coded based on league-wide ranking among all skaters with 10+ games played. Click any column header to sort.</p>
+                    <p class="text-gray-400 mb-2">Stats with percentile data are color-coded based on league-wide ranking among all skaters with 10+ games played. Click any column header to sort, or click a player's name to expand season-by-season NHL Edge history with trend badges.</p>
                     <div class="flex flex-wrap gap-2 items-center">
                         <span class="pct-10 px-2 py-0.5 rounded text-[10px] font-mono">1-19th</span>
                         <span class="pct-20 px-2 py-0.5 rounded text-[10px] font-mono">20-29th</span>
@@ -185,6 +186,7 @@
                                 <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white" data-sort="hits" title="Total Hits this season">HITS</th>
                                 <th class="p-3 whitespace-nowrap text-right cursor-pointer hover:text-white border-r border-grid-line" data-sort="blocks" title="Total Blocked Shots this season">BLKS</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="top_speed_mph" title="Top skating speed recorded this season (mph)">TOP MPH</th>
+                                <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_18_plus" title="Total skating bursts over 18 mph (18-20, 20-22, and 22+ combined)">BURST 18+</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_20_plus" title="Number of skating bursts over 20 mph">BURST 20+</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green cursor-pointer hover:text-white" data-sort="bursts_22_plus" title="Number of skating bursts over 22 mph (elite speed)">BURST 22+</th>
                                 <th class="p-3 whitespace-nowrap text-right text-neon-green border-r border-grid-line cursor-pointer hover:text-white" data-sort="distance_per_game_miles" title="Distance skated per game (miles)">DIST/G</th>

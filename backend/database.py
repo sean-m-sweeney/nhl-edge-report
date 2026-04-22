@@ -247,6 +247,8 @@ def _run_migrations(cursor):
         cursor.execute("ALTER TABLE players ADD COLUMN division TEXT")
     if "conference" not in player_columns:
         cursor.execute("ALTER TABLE players ADD COLUMN conference TEXT")
+    if "birth_date" not in player_columns:
+        cursor.execute("ALTER TABLE players ADD COLUMN birth_date TEXT")
 
     # Check player_stats for new columns
     cursor.execute("PRAGMA table_info(player_stats)")
@@ -273,6 +275,68 @@ def _run_migrations(cursor):
 
     if "shots_percentile" not in edge_columns:
         cursor.execute("ALTER TABLE player_edge_stats ADD COLUMN shots_percentile INTEGER")
+    if "bursts_18_plus" not in edge_columns:
+        cursor.execute("ALTER TABLE player_edge_stats ADD COLUMN bursts_18_plus INTEGER")
+    if "bursts_18_percentile" not in edge_columns:
+        cursor.execute("ALTER TABLE player_edge_stats ADD COLUMN bursts_18_percentile INTEGER")
+    for col in (
+        "off_zone_5v5_pct", "off_zone_pp_pct", "off_zone_pk_pct",
+        "def_zone_5v5_pct", "def_zone_pp_pct", "def_zone_pk_pct",
+    ):
+        if col not in edge_columns:
+            cursor.execute(f"ALTER TABLE player_edge_stats ADD COLUMN {col} REAL")
+
+    # Historical per-season Edge snapshots (frozen). Populated by backfill + refresh.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS player_season_edge_stats (
+            player_id INTEGER NOT NULL,
+            season TEXT NOT NULL,
+            updated_at DATETIME NOT NULL,
+            games_played INTEGER,
+            top_speed_mph REAL,
+            top_speed_percentile INTEGER,
+            bursts_18_plus INTEGER,
+            bursts_18_percentile INTEGER,
+            bursts_20_plus INTEGER,
+            bursts_20_percentile INTEGER,
+            bursts_22_plus INTEGER,
+            bursts_22_percentile INTEGER,
+            distance_per_game_miles REAL,
+            distance_percentile INTEGER,
+            off_zone_time_pct REAL,
+            off_zone_percentile INTEGER,
+            def_zone_time_pct REAL,
+            def_zone_percentile INTEGER,
+            neu_zone_time_pct REAL,
+            off_zone_5v5_pct REAL,
+            off_zone_pp_pct REAL,
+            off_zone_pk_pct REAL,
+            def_zone_5v5_pct REAL,
+            def_zone_pp_pct REAL,
+            def_zone_pk_pct REAL,
+            zone_starts_off_pct REAL,
+            zone_starts_percentile INTEGER,
+            top_shot_speed_mph REAL,
+            shot_speed_percentile INTEGER,
+            PRIMARY KEY (player_id, season),
+            FOREIGN KEY (player_id) REFERENCES players(player_id)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_player_season_edge_player
+        ON player_season_edge_stats(player_id)
+    """)
+
+    # NHL player_id -> HockeyDB pid mapping (scraped).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS external_player_ids (
+            player_id INTEGER PRIMARY KEY,
+            hockeydb_pid INTEGER,
+            hockeydb_lookup_at DATETIME,
+            hockeydb_lookup_status TEXT,
+            FOREIGN KEY (player_id) REFERENCES players(player_id)
+        )
+    """)
 
     # Drop old tables if they exist (no longer needed)
     cursor.execute("DROP TABLE IF EXISTS position_averages")
@@ -376,17 +440,27 @@ def set_last_updated(timestamp: datetime):
 
 def upsert_player(player_id: int, name: str, position: str, jersey_number: Optional[int],
                   team_abbr: Optional[str] = None):
-    """Insert or update a player."""
+    """Insert or update a player (preserves birth_date across refreshes)."""
     with db_connection() as conn:
         cursor = conn.cursor()
 
         # Get team info
         team_info = get_team_info(team_abbr) if team_abbr else {}
 
+        # Use ON CONFLICT UPDATE so columns not listed (e.g. birth_date, populated
+        # separately from Edge data) aren't wiped on every refresh.
         cursor.execute("""
-            INSERT OR REPLACE INTO players (player_id, name, position, jersey_number,
-                                            team_abbr, team_name, division, conference)
+            INSERT INTO players (player_id, name, position, jersey_number,
+                                 team_abbr, team_name, division, conference)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(player_id) DO UPDATE SET
+                name = excluded.name,
+                position = excluded.position,
+                jersey_number = excluded.jersey_number,
+                team_abbr = excluded.team_abbr,
+                team_name = excluded.team_name,
+                division = excluded.division,
+                conference = excluded.conference
         """, (
             player_id,
             name,
@@ -398,6 +472,36 @@ def upsert_player(player_id: int, name: str, position: str, jersey_number: Optio
             team_info.get("conference")
         ))
         conn.commit()
+
+
+def set_player_birth_date(player_id: int, birth_date: Optional[str]):
+    """Record a player's birth_date (ISO YYYY-MM-DD). No-op if birth_date is falsy."""
+    if not birth_date:
+        return
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE players SET birth_date = ? WHERE player_id = ?",
+            (birth_date, player_id),
+        )
+        conn.commit()
+
+
+def get_player_birth_year(player_id: int) -> Optional[int]:
+    """Return the birth year for a player, or None if unknown."""
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT birth_date FROM players WHERE player_id = ?",
+            (player_id,),
+        )
+        row = cursor.fetchone()
+        if row and row["birth_date"]:
+            try:
+                return int(row["birth_date"][:4])
+            except (ValueError, TypeError):
+                return None
+        return None
 
 
 def upsert_player_stats(player_id: int, stats: dict):
@@ -451,21 +555,26 @@ def upsert_player_edge_stats(player_id: int, stats: dict):
             INSERT INTO player_edge_stats (
                 player_id, updated_at,
                 top_speed_mph, top_speed_percentile,
+                bursts_18_plus, bursts_18_percentile,
                 bursts_20_plus, bursts_20_percentile,
                 bursts_22_plus, bursts_22_percentile,
                 distance_per_game_miles, distance_percentile,
                 off_zone_time_pct, off_zone_percentile,
                 def_zone_time_pct, def_zone_percentile,
                 neu_zone_time_pct,
+                off_zone_5v5_pct, off_zone_pp_pct, off_zone_pk_pct,
+                def_zone_5v5_pct, def_zone_pp_pct, def_zone_pk_pct,
                 zone_starts_off_pct, zone_starts_percentile,
                 top_shot_speed_mph, shot_speed_percentile,
                 shots_percentile
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             player_id,
             datetime.now().isoformat(),
             stats.get("top_speed_mph"),
             stats.get("top_speed_percentile"),
+            stats.get("bursts_18_plus"),
+            stats.get("bursts_18_percentile"),
             stats.get("bursts_20_plus"),
             stats.get("bursts_20_percentile"),
             stats.get("bursts_22_plus"),
@@ -477,6 +586,12 @@ def upsert_player_edge_stats(player_id: int, stats: dict):
             stats.get("def_zone_time_pct"),
             stats.get("def_zone_percentile"),
             stats.get("neu_zone_time_pct"),
+            stats.get("off_zone_5v5_pct"),
+            stats.get("off_zone_pp_pct"),
+            stats.get("off_zone_pk_pct"),
+            stats.get("def_zone_5v5_pct"),
+            stats.get("def_zone_pp_pct"),
+            stats.get("def_zone_pk_pct"),
             stats.get("zone_starts_off_pct"),
             stats.get("zone_starts_percentile"),
             stats.get("top_shot_speed_mph"),
@@ -484,6 +599,112 @@ def upsert_player_edge_stats(player_id: int, stats: dict):
             stats.get("shots_percentile")
         ))
         conn.commit()
+
+
+SEASON_EDGE_COLUMNS = (
+    "top_speed_mph", "top_speed_percentile",
+    "bursts_18_plus", "bursts_18_percentile",
+    "bursts_20_plus", "bursts_20_percentile",
+    "bursts_22_plus", "bursts_22_percentile",
+    "distance_per_game_miles", "distance_percentile",
+    "off_zone_time_pct", "off_zone_percentile",
+    "def_zone_time_pct", "def_zone_percentile",
+    "neu_zone_time_pct",
+    "off_zone_5v5_pct", "off_zone_pp_pct", "off_zone_pk_pct",
+    "def_zone_5v5_pct", "def_zone_pp_pct", "def_zone_pk_pct",
+    "zone_starts_off_pct", "zone_starts_percentile",
+    "top_shot_speed_mph", "shot_speed_percentile",
+)
+
+
+def upsert_player_season_edge_stats(player_id: int, season: str, games_played: Optional[int], stats: dict):
+    """Insert or replace a player's Edge stats for a specific season."""
+    cols = ["player_id", "season", "updated_at", "games_played"] + list(SEASON_EDGE_COLUMNS)
+    placeholders = ",".join("?" * len(cols))
+    values = [player_id, season, datetime.now().isoformat(), games_played] + [stats.get(c) for c in SEASON_EDGE_COLUMNS]
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"INSERT OR REPLACE INTO player_season_edge_stats ({','.join(cols)}) VALUES ({placeholders})",
+            values
+        )
+        conn.commit()
+
+
+def get_player_season_history(player_id: int) -> list:
+    """Return list of season rows (oldest first) for a player."""
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM player_season_edge_stats
+            WHERE player_id = ?
+            ORDER BY season ASC
+        """, (player_id,))
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_seasons_already_backfilled(player_id: int) -> set:
+    """Return set of season strings already stored for a player (used to skip backfill work)."""
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT season FROM player_season_edge_stats WHERE player_id = ?",
+            (player_id,)
+        )
+        return {row["season"] for row in cursor.fetchall()}
+
+
+def get_hockeydb_mapping(player_id: int) -> Optional[dict]:
+    """Return external-ID mapping row for a player, or None."""
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM external_player_ids WHERE player_id = ?",
+            (player_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def upsert_hockeydb_mapping(player_id: int, hockeydb_pid: Optional[int], status: str):
+    """Record a HockeyDB lookup result. status is 'found' | 'not_found' | 'ambiguous'."""
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO external_player_ids
+                (player_id, hockeydb_pid, hockeydb_lookup_at, hockeydb_lookup_status)
+            VALUES (?, ?, ?, ?)
+        """, (player_id, hockeydb_pid, datetime.now().isoformat(), status))
+        conn.commit()
+
+
+def get_players_missing_hockeydb(retry_not_found: bool = False) -> list:
+    """
+    Return (player_id, name) tuples for players that need a HockeyDB lookup.
+
+    Always includes players with no mapping row and players whose prior lookup
+    was rate-limited (we want to retry those). When retry_not_found=True, also
+    retries 'not_found' rows -- a player may have been missing on a past run
+    (e.g. a rookie not yet in HockeyDB) but present now.
+    Rows with status='found' or 'ambiguous' are never revisited automatically.
+    """
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        if retry_not_found:
+            cursor.execute("""
+                SELECT p.player_id, p.name FROM players p
+                LEFT JOIN external_player_ids e ON p.player_id = e.player_id
+                WHERE e.hockeydb_lookup_status IS NULL
+                   OR e.hockeydb_lookup_status IN ('not_found', 'rate_limited')
+            """)
+        else:
+            cursor.execute("""
+                SELECT p.player_id, p.name FROM players p
+                LEFT JOIN external_player_ids e ON p.player_id = e.player_id
+                WHERE e.hockeydb_lookup_status IS NULL
+                   OR e.hockeydb_lookup_status = 'rate_limited'
+            """)
+        return [(row["player_id"], row["name"]) for row in cursor.fetchall()]
 
 
 def clear_all_player_data():
@@ -855,12 +1076,15 @@ def get_players_with_stats(team_abbr: Optional[str] = None,
                 s.p60, s.p60_percentile,
                 s.toi_per_game, s.toi_per_game_percentile,
                 e.top_speed_mph, e.top_speed_percentile,
+                e.bursts_18_plus, e.bursts_18_percentile,
                 e.bursts_20_plus, e.bursts_20_percentile,
                 e.bursts_22_plus, e.bursts_22_percentile,
                 e.distance_per_game_miles, e.distance_percentile,
                 e.off_zone_time_pct, e.off_zone_percentile,
                 e.def_zone_time_pct, e.def_zone_percentile,
                 e.neu_zone_time_pct,
+                e.off_zone_5v5_pct, e.off_zone_pp_pct, e.off_zone_pk_pct,
+                e.def_zone_5v5_pct, e.def_zone_pp_pct, e.def_zone_pk_pct,
                 e.zone_starts_off_pct, e.zone_starts_percentile,
                 e.top_shot_speed_mph, e.shot_speed_percentile,
                 e.shots_percentile
@@ -903,12 +1127,15 @@ def get_player_by_id(player_id: int) -> Optional[dict]:
                 s.p60, s.p60_percentile,
                 s.toi_per_game, s.toi_per_game_percentile,
                 e.top_speed_mph, e.top_speed_percentile,
+                e.bursts_18_plus, e.bursts_18_percentile,
                 e.bursts_20_plus, e.bursts_20_percentile,
                 e.bursts_22_plus, e.bursts_22_percentile,
                 e.distance_per_game_miles, e.distance_percentile,
                 e.off_zone_time_pct, e.off_zone_percentile,
                 e.def_zone_time_pct, e.def_zone_percentile,
                 e.neu_zone_time_pct,
+                e.off_zone_5v5_pct, e.off_zone_pp_pct, e.off_zone_pk_pct,
+                e.def_zone_5v5_pct, e.def_zone_pp_pct, e.def_zone_pk_pct,
                 e.zone_starts_off_pct, e.zone_starts_percentile,
                 e.top_shot_speed_mph, e.shot_speed_percentile,
                 e.shots_percentile

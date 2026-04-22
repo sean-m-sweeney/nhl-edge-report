@@ -94,3 +94,60 @@ tr.table-row:hover td.sticky {
     text-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
     box-shadow: inset 0 0 12px rgba(255, 0, 255, 0.3);
 }
+
+/* INLINE PLAYER DETAIL ROW */
+tr.detail-row > td {
+    background-color: rgba(0, 0, 0, 0.55);
+    border-top: 1px solid #27272a;
+    border-bottom: 1px solid #27272a;
+}
+tr.detail-row table th {
+    white-space: nowrap;
+    border-bottom: 1px solid #27272a;
+}
+tr.detail-row table tr:hover td {
+    background-color: rgba(0, 243, 255, 0.06);
+}
+
+.trend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: 0.02em;
+    border: 1px solid #27272a;
+    background-color: #18181b;
+    color: #9ca3af;
+}
+.trend-rising {
+    color: #39ff14;
+    border-color: rgba(57, 255, 20, 0.4);
+    text-shadow: 0 0 6px rgba(57, 255, 20, 0.4);
+}
+.trend-declining {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.4);
+    text-shadow: 0 0 6px rgba(248, 113, 113, 0.3);
+}
+.trend-stable {
+    color: #a1a1aa;
+    border-color: #3f3f46;
+}
+.trend-unknown {
+    color: #52525b;
+    border-color: #27272a;
+}
+
+.player-name-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+}
+.player-name-toggle:focus {
+    outline: none;
+    color: #00f3ff;
+}
