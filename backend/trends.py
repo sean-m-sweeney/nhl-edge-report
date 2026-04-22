@@ -53,8 +53,16 @@ def classify_trend(values: list, games_played: Optional[list] = None) -> Optiona
 
     pct_change = (last - prior_mean) / prior_mean
 
-    if pct_change > TREND_THRESHOLD:
-        return RISING
+    # Sanity-net overrides: never call a career-high year "declining" or a
+    # career-low year "rising". Belt-and-suspenders -- last-vs-prior-mean
+    # shouldn't produce those today, but this protects against future
+    # algorithm tweaks flipping intuitive cases.
     if pct_change < -TREND_THRESHOLD:
+        if last >= max(pairs):
+            return STABLE
         return DECLINING
+    if pct_change > TREND_THRESHOLD:
+        if last <= min(pairs):
+            return STABLE
+        return RISING
     return STABLE
