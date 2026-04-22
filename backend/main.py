@@ -252,16 +252,27 @@ async def get_player_history(player_id: int):
         for s in season_rows
     ]
 
-    # Trend classifiers on the metrics that have the most meaning to fans.
+    # Trend classifiers. Filter small-sample seasons via games_played, and
+    # normalize burst counts to per-game so an injury-shortened year doesn't
+    # look like a decline in pace.
     def series(key: str) -> list:
         return [s.get(key) for s in season_rows]
 
+    def per_game_series(key: str) -> list:
+        out = []
+        for s in season_rows:
+            v = s.get(key)
+            gp = s.get("games_played")
+            out.append(v / gp if v is not None and gp else None)
+        return out
+
+    gp_series = series("games_played")
     trends = TrendBadges(
-        top_speed=classify_trend(series("top_speed_mph")),
-        bursts_18_plus=classify_trend(series("bursts_18_plus")),
-        bursts_20_plus=classify_trend(series("bursts_20_plus")),
-        distance_per_game_miles=classify_trend(series("distance_per_game_miles")),
-        top_shot_speed_mph=classify_trend(series("top_shot_speed_mph")),
+        top_speed=classify_trend(series("top_speed_mph"), gp_series),
+        bursts_18_plus=classify_trend(per_game_series("bursts_18_plus"), gp_series),
+        bursts_20_plus=classify_trend(per_game_series("bursts_20_plus"), gp_series),
+        distance_per_game_miles=classify_trend(series("distance_per_game_miles"), gp_series),
+        top_shot_speed_mph=classify_trend(series("top_shot_speed_mph"), gp_series),
     )
 
     mapping = database.get_hockeydb_mapping(player_id)

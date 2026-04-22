@@ -6,44 +6,50 @@ RISING = "rising"
 STABLE = "stable"
 DECLINING = "declining"
 
-# Per-season percent change that flips a value away from 'stable'. 1.5% per
-# season is ~4.5% over three seasons -- well outside noise for speed metrics,
-# and still conservative enough that a single soft year doesn't mis-flag
-# burst/distance counts.
-TREND_THRESHOLD = 0.015
+# Minimum games played for a season to count toward the trend.
+# Below this, the sample is too small for Edge metrics to be meaningful
+# (injury-shortened seasons, late call-ups, traded-at-deadline cases).
+MIN_GP_FOR_TREND = 20
+
+# Percent change between the most recent season and the mean of prior
+# valid seasons that flips the badge away from 'stable'. 2% catches the
+# kind of year-over-year shift a human notices in the chart without
+# flagging ordinary variance.
+TREND_THRESHOLD = 0.02
 
 
-def classify_trend(values: list) -> Optional[str]:
+def classify_trend(values: list, games_played: Optional[list] = None) -> Optional[str]:
     """
-    Classify a short sequence of metric values across seasons.
+    Classify how the most recent season compares to the prior seasons.
 
-    `values` is oldest-to-newest. None/zero entries are dropped before fitting.
-    Returns 'rising' / 'stable' / 'declining', or None if there are fewer than
-    two valid data points.
+    `values` is oldest-to-newest. If `games_played` is given (same length),
+    seasons with < MIN_GP_FOR_TREND games are filtered out -- a 4-game season
+    is noise, not a trend point.
 
-    The slope is a simple OLS line through (season_index, value), normalized by
-    the mean to get a per-season percent change. Magnitudes below TREND_THRESHOLD
-    are classified as stable to avoid calling noise a trend.
+    The signal is last-season-value minus the mean of prior valid seasons,
+    expressed as a percent. This matches how a human reads the table:
+    "did this year jump / drop compared to the baseline of the last few years?"
+
+    Returns 'rising' / 'stable' / 'declining', or None if fewer than two
+    seasons pass the filter.
     """
-    cleaned = [(i, v) for i, v in enumerate(values) if v is not None]
-    if len(cleaned) < 2:
+    if games_played is not None and len(games_played) == len(values):
+        pairs = [
+            v for v, g in zip(values, games_played)
+            if v is not None and g is not None and g >= MIN_GP_FOR_TREND
+        ]
+    else:
+        pairs = [v for v in values if v is not None]
+
+    if len(pairs) < 2:
         return None
 
-    xs = [p[0] for p in cleaned]
-    ys = [p[1] for p in cleaned]
-    mean_y = sum(ys) / len(ys)
-    if mean_y == 0:
+    last = pairs[-1]
+    prior_mean = sum(pairs[:-1]) / (len(pairs) - 1)
+    if prior_mean == 0:
         return STABLE
 
-    n = len(cleaned)
-    mean_x = sum(xs) / n
-    num = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
-    den = sum((xs[i] - mean_x) ** 2 for i in range(n))
-    if den == 0:
-        return STABLE
-
-    slope = num / den
-    pct_change = slope / mean_y
+    pct_change = (last - prior_mean) / prior_mean
 
     if pct_change > TREND_THRESHOLD:
         return RISING
