@@ -1293,15 +1293,27 @@ function renderDetailRow(history, colspan) {
     const distSeries = seasons.map(s => s.edge_stats.distance_per_game_miles);
     const shotSeries = seasons.map(s => s.edge_stats.top_shot_speed_mph);
 
+    // The trend badge is computed on per-game burst rate so injury-shortened
+    // seasons don't look like pace declines. Show both raw count and /g so
+    // readers can see why the badge went the way it did.
+    const perGame = (count, gp) => (count != null && gp) ? (count / gp).toFixed(2) : null;
+
     const rows = seasons.map(s => {
         const e = s.edge_stats;
+        const gp = s.games_played;
+        const b18pg = perGame(e.bursts_18_plus, gp);
+        const b20pg = perGame(e.bursts_20_plus, gp);
         return `
             <tr>
                 <td class="px-2 py-1 font-mono text-gray-300">${s.season}</td>
-                <td class="px-2 py-1 text-right font-mono text-gray-400">${formatStat(s.games_played)}</td>
+                <td class="px-2 py-1 text-right font-mono text-gray-400">${formatStat(gp)}</td>
                 <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.top_speed_percentile)}">${formatStat(e.top_speed_mph, 1)}</td>
-                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_18_percentile)}">${formatStat(e.bursts_18_plus, 0)}</td>
-                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_20_percentile)}">${formatStat(e.bursts_20_plus, 0)}</td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_18_percentile)}">
+                    ${formatStat(e.bursts_18_plus, 0)}${b18pg ? `<span class="text-gray-500 ml-1">(${b18pg}/g)</span>` : ''}
+                </td>
+                <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_20_percentile)}">
+                    ${formatStat(e.bursts_20_plus, 0)}${b20pg ? `<span class="text-gray-500 ml-1">(${b20pg}/g)</span>` : ''}
+                </td>
                 <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.bursts_22_percentile)}">${formatStat(e.bursts_22_plus, 0)}</td>
                 <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.distance_percentile)}">${formatStat(e.distance_per_game_miles, 2)}</td>
                 <td class="px-2 py-1 text-right font-mono ${getPercentileClass(e.shot_speed_percentile)}">${formatStat(e.top_shot_speed_mph, 1)}</td>
