@@ -7,9 +7,11 @@ STABLE = "stable"
 DECLINING = "declining"
 
 # Minimum games played for a season to count toward the trend.
-# Below this, the sample is too small for Edge metrics to be meaningful
-# (injury-shortened seasons, late call-ups, traded-at-deadline cases).
-MIN_GP_FOR_TREND = 20
+# Half-season is the floor: below this, per-game burst rates haven't
+# stabilized, and a hot 20-game stretch can anchor the baseline at a
+# level the player never sustained in a full season (real case:
+# Couturier 2021-22, 29 GP at 6.7 B18+/g, vs his full-season 5.5/g).
+MIN_GP_FOR_TREND = 40
 
 # Percent change between the most recent season and the mean of prior
 # valid seasons that flips the badge away from 'stable'. 2% catches the
