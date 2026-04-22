@@ -20,6 +20,7 @@ from backend.models import (
 from backend.fetcher import refresh_data
 from backend.trends import classify_trend
 from backend.hockeydb import hockeydb_profile_url
+from backend.fetcher import get_current_season
 
 # API key for protected endpoints
 API_REFRESH_KEY = os.environ.get("API_REFRESH_KEY", "")
@@ -229,6 +230,19 @@ async def get_player_history(player_id: int):
     player = db_row_to_player(row)
 
     season_rows = database.get_player_season_history(player_id)
+
+    # Ensure the current season always shows in the detail view. Until the next
+    # scheduled refresh writes it into player_season_edge_stats, synthesize a
+    # row from the live player_edge_stats join we already have in `row`.
+    current_season = get_current_season()
+    already_stored = {s["season"] for s in season_rows}
+    if current_season not in already_stored and row.get("top_speed_mph") is not None:
+        season_rows = list(season_rows) + [{
+            **row,
+            "season": current_season,
+            "games_played": row.get("games_played"),
+        }]
+
     seasons = [
         SeasonEdgeRow(
             season=_format_season_label(s["season"]),
