@@ -6,6 +6,6 @@
     "build:css": "tailwindcss -i ./frontend/src/input.css -o ./frontend/styles.css --minify"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.0"
+    "tailwindcss": "^4.2.4"
   }
 }
